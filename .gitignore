@@ -1,0 +1,25 @@
+# Игнорировать директории виртуальных окружений Python
+venv/
+.venv/
+env/
+
+# Игнорировать байт-код Python
+*.pyc
+__pycache__/
+
+# Игнорировать локальные файлы конфигурации (секреты)
+.env
+settings.json
+
+# Игнорировать директории с данными и сессиями, генерируемые приложением
+chats/
+workspace/
+semantic_memory.db
+semantic_memory.index
+knowledge_graph.json
+*.session # Игнорировать файлы сессий telethon (например, ai_agent_session.session)
+
+
+# Игнорировать файлы, создаваемые операционными системами
+.DS_Store # macOS
+Thumbs.db # Windows

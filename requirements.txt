@@ -1,0 +1,14 @@
+openai
+python-dotenv
+PyQt5
+requests
+flask
+beautifulsoup4
+lxml
+waitress
+selenium
+pyperclip
+telethon
+faiss-cpu
+networkx
+sentence-transformers
