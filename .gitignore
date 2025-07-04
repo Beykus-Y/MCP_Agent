@@ -24,3 +24,5 @@ semantic_memory.db
 # Игнорировать файлы, создаваемые операционными системами
 .DS_Store # macOS
 Thumbs.db # Windows
+rpg_database.db
+rpg_active_save.json

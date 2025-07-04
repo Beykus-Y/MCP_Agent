@@ -275,7 +275,24 @@ def suggest_mcp_action(params):
     if not suggestion or not details: raise JsonRpcError(-32602, "Отсутствуют suggestion или details.")
     return {"status": "suggestion_provided", "message": "Пожалуйста, выполни следующее действие.", "suggested_action": suggestion, "suggested_params": details}
 
-### ИСПРАВЛЕННЫЙ СПИСОК ФУНКЦИЙ ###
+def get_player_character_info(params):
+    """Находит персонажа игрока в активной игре и возвращает его данные."""
+    save_id = get_active_save_id(params)
+    if save_id is None: raise JsonRpcError(-32000, "Активная игра не найдена.")
+    conn = get_db_connection(); cursor = conn.cursor()
+    cursor.execute("SELECT * FROM characters WHERE save_id = ? AND is_player = 1", (save_id,))
+    player_data = cursor.fetchone()
+    if not player_data: raise JsonRpcError(-32000, "Персонаж игрока не найден в этой игре.")
+    result = dict(player_data)
+    result['attributes'] = json.loads(result['attributes']) if result['attributes'] else {}
+    return result
+
+def get_player_location(params):
+    """Комбинированное действие: находит игрока и возвращает детали его текущей локации."""
+    player_data = get_player_character_info(params)
+    location_params = {"save_id": player_data["save_id"], "x": player_data["location_x"], "y": player_data["location_y"]}
+    return get_location_details(location_params)
+
 def explore_location(params):
     char_id = params.get("character_id"); new_x = params.get("new_x"); new_y = params.get("new_y")
     if char_id is None or new_x is None or new_y is None: raise JsonRpcError(-32602, "Необходимы параметры: character_id, new_x, new_y.")
@@ -287,8 +304,97 @@ def explore_location(params):
         return {"status": "moved_to_unexplored_area", "message": "Персонаж перемещен. Эта область не исследована. Опиши ее и вызови 'update_location'."}
     else:
         return {"status": "moved_to_explored_area", "details": location_data["details"]}
+    
+def get_player_status(params):
+    """
+    Возвращает ПОЛНУЮ сводку по персонажу игрока за один вызов:
+    детали персонажа, его инвентарь и информацию о его текущей локации.
+    """
+    # 1. Получаем инфо о персонаже
+    player_info = get_player_character_info(params)
+    player_id = player_info.get("id")
+    
+    # 2. Получаем инвентарь
+    inventory_info = get_inventory({"character_id": player_id})
+    
+    # 3. Получаем инфо о локации
+    location_info = get_player_location(params)
+    
+    return {
+        "character_details": player_info,
+        "inventory": inventory_info.get("inventory", []),
+        "location": location_info
+    }
+
+def delete_save(params):
+    """Удаляет игру и все связанные с ней данные из БД."""
+    save_id = params.get("save_id")
+    if save_id is None:
+        raise JsonRpcError(-32602, "Необходим параметр save_id для удаления.")
+    
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    # Благодаря "ON DELETE CASCADE", удаление записи из `saves`
+    # автоматически удалит все связанные записи в других таблицах.
+    cursor.execute("DELETE FROM saves WHERE id = ?", (save_id,))
+    # Проверяем, была ли удалена строка
+    if cursor.rowcount == 0:
+        conn.close()
+        raise JsonRpcError(-32000, f"Игра с ID {save_id} не найдена.")
+    
+    conn.commit()
+    conn.close()
+    return {"status": "ok", "message": f"Игра с ID {save_id} и все ее данные были удалены."}
+
+def set_global_state(params):
+    """Устанавливает или обновляет глобальную переменную для активной игры."""
+    save_id = get_active_save_id(params)
+    if save_id is None:
+        raise JsonRpcError(-32000, "Не удалось определить активную игру.")
+    
+    key = params.get("key")
+    value = params.get("value")
+    if key is None or value is None:
+        raise JsonRpcError(-32602, "Необходимы параметры 'key' и 'value'.")
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    # Используем UPSERT для удобства
+    cursor.execute(
+        """INSERT INTO game_state (save_id, key, value) VALUES (?, ?, ?)
+           ON CONFLICT(save_id, key) DO UPDATE SET value=excluded.value""",
+        (save_id, key, str(value)) # Сохраняем значение как строку
+    )
+    conn.commit()
+    conn.close()
+    return {"status": "ok"}
+
+def find_character_by_name(params):
+    """Ищет персонажей по имени в активной игре."""
+    save_id = get_active_save_id(params)
+    if save_id is None:
+        raise JsonRpcError(-32000, "Не удалось определить активную игру.")
+    
+    name_to_find = params.get("name")
+    if not name_to_find:
+        raise JsonRpcError(-32602, "Необходим параметр 'name'.")
+        
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT id, name, is_player FROM characters WHERE save_id = ? AND name LIKE ?", (save_id, f"%{name_to_find}%"))
+    characters = [dict(row) for row in cursor.fetchall()]
+    conn.close()
+    
+    return {"characters_found": characters}
 
 RPG_FUNCTIONS = [
+    {
+        "name": "get_player_status",
+        "description": "Самый главный инструмент для получения полной информации о состоянии игрока. Используй его, если пользователь спрашивает 'где я?', 'что я вижу?', 'что у меня есть?' или просит общую сводку. Возвращает всё: статы, инвентарь и информацию о локации.",
+        "parameters": {}
+    },
+    {"name": "get_player_location", "description": "Самый быстрый способ узнать, где находится игрок и что его окружает. Используй, если пользователь спрашивает 'где я?' или 'что я вижу?'.", "parameters": {}},
+    {"name": "get_player_character_info", "description": "Получает полную информацию о персонаже игрока (статы, HP, ID) в текущей активной игре.", "parameters": {}},
     {"name": "explore_location", "description": "Основное действие для перемещения. Перемещает персонажа и сообщает, что находится в новой локации.", "parameters": {"type": "object", "properties": {"character_id": {"type": "integer"}, "new_x": {"type": "integer"}, "new_y": {"type": "integer"}, "save_id": {"type": "integer", "description": "ID игры, необязателен, если игра активна."}}, "required": ["character_id", "new_x", "new_y"]}},
     {"name": "new_game", "description": "Начинает новую игру и автоматически делает ее активной.", "parameters": {"type": "object", "properties": {"name": {"type": "string"}}, "required": ["name"]}},
     {"name": "list_saves", "description": "Показывает список всех сохраненных игр.", "parameters": {}},
@@ -308,6 +414,21 @@ RPG_FUNCTIONS = [
     {"name": "roll_dice", "description": "Бросает кости по формуле.", "parameters": {"type": "object", "properties": {"expression": {"type": "string"}}, "required": ["expression"]}},
     {"name": "generate_random_encounter", "description": "Создает случайное событие в локации в активной игре. save_id необязателен.", "parameters": {"type": "object", "properties": {"save_id": {"type": "integer"}, "x": {"type": "integer"}, "y": {"type": "integer"}}, "required": ["x", "y"]}},
     {"name": "suggest_mcp_action", "description": "Предлагает ИИ выполнить действие с помощью ДРУГОГО MCP.", "parameters": {"type": "object", "properties": {"suggestion": {"type": "string"}, "details": {"type": "object"}}, "required": ["suggestion", "details"]}},
+    {
+        "name": "delete_save",
+        "description": "Безвозвратно удаляет сохранение игры и всех связанных с ней персонажей, квесты и локации.",
+        "parameters": {"type": "object", "properties": {"save_id": {"type": "integer"}}, "required": ["save_id"]}
+    },
+    {
+        "name": "set_global_state",
+        "description": "Устанавливает глобальную переменную для текущей активной игры. Используй это для установки времени, погоды или других правил мира.",
+        "parameters": {"type": "object", "properties": {"key": {"type": "string", "description": "Название переменной, например, 'current_time'."}, "value": {"type": "string", "description": "Значение переменной."}}, "required": ["key", "value"]}
+    },
+    {
+        "name": "find_character_by_name",
+        "description": "Ищет персонажа по имени в активной игре и возвращает список совпадений с их ID.",
+        "parameters": {"type": "object", "properties": {"name": {"type": "string"}}, "required": ["name"]}
+    },
 ]
 
 # --- Словарь методов ---

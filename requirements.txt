@@ -12,3 +12,4 @@ telethon
 faiss-cpu
 networkx
 sentence-transformers
+qtawesome

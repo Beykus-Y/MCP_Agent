@@ -1,4 +1,4 @@
-# chat_manager.py
+# chat_manager.py (Версия 2.0 - с поддержкой мультимодальных сообщений)
 import os
 import json
 import time
@@ -24,9 +24,16 @@ class ChatManager:
                     path = os.path.join(self.chats_dir, filename)
                     with open(path, 'r', encoding='utf-8') as f:
                         data = json.load(f)
+                    
+                    # Получаем заголовок. Он может быть строкой или (из-за бага) списком.
+                    title = data.get("title", "Без названия")
+                    if isinstance(title, list):
+                        # Аварийный обработчик для чатов, которые уже были сохранены с багом
+                        title = "Поврежденный заголовок"
+
                     chats.append({
                         "id": chat_id,
-                        "title": data.get("title", "Без названия")
+                        "title": title
                     })
                 except (json.JSONDecodeError, IndexError):
                     print(f"Ошибка чтения файла чата: {filename}")
@@ -44,19 +51,39 @@ class ChatManager:
         
         with open(path, 'r', encoding='utf-8') as f:
             data = json.load(f)
-        return data.get("messages", []), data.get("title", "Без названия")
+        
+        title = data.get("title", "Без названия")
+        if isinstance(title, list):
+            title = "Поврежденный заголовок"
+            
+        return data.get("messages", []), title
 
     def save_chat(self, chat_id, messages, title=None):
         """Сохраняет или обновляет чат."""
         if not chat_id:
             chat_id = self._generate_id()
         
+        # --- ИСПРАВЛЕНО: Умная генерация заголовка ---
         if not title:
             # Автоматически генерируем заголовок из первого сообщения пользователя
             for msg in messages:
-                if msg['role'] == 'user':
-                    title = msg['content'][:50] # Первые 50 символов
-                    break
+                if msg.get('role') == 'user':
+                    content = msg.get('content')
+                    
+                    # Проверяем, старый формат (строка) или новый (список)
+                    if isinstance(content, list):
+                        # Ищем текстовую часть в новом формате
+                        for part in content:
+                            if part.get('type') == 'text':
+                                title = part.get('text', '')[:50].strip()
+                                break # Нашли текст, выходим из внутреннего цикла
+                    elif isinstance(content, str):
+                        # Обрабатываем старый формат
+                        title = content[:50].strip()
+                    
+                    if title: # Если заголовок найден (не пустой), выходим из внешнего цикла
+                        break
+            
             if not title:
                 title = "Новый чат " + datetime.fromtimestamp(int(chat_id)/1000).strftime('%Y-%m-%d %H:%M')
 

@@ -1,15 +1,39 @@
-# ai_interface.py (ИСПРАВЛЕННАЯ ВЕРСИЯ)
+# ai_interface.py (Версия 5.0 - с Иерархическими Агентами)
 
 import os
 import json
 import requests
+import copy
 import logging
 from dotenv import load_dotenv
 from openai import OpenAI
 from PyQt5 import QtCore
 
+
+def _sanitize_log_data(data):
+    """Рекурсивно очищает данные для логирования, заменяя base64 на заменитель."""
+    if not isinstance(data, (dict, list)):
+        return data
+
+    # Создаем глубокую копию, чтобы не изменять оригинальные данные
+    log_data = copy.deepcopy(data)
+
+    if isinstance(log_data, list):
+        return [_sanitize_log_data(item) for item in log_data]
+
+    # Обрабатываем словари
+    for key, value in log_data.items():
+        if isinstance(value, str) and value.startswith('data:image'):
+            log_data[key] = f"<base64_image_data len={len(value)}>"
+        elif isinstance(value, (dict, list)):
+            log_data[key] = _sanitize_log_data(value)
+            
+    return log_data
+
 class MCPServer:
-    # ... (код без изменений) ...
+    """
+    Представляет собой клиент для одного MCP-сервера.
+    """
     def __init__(self, name: str, url: str, headers=None):
         self.name = name
         self.url = url.rstrip("/") + "/mcp"
@@ -17,6 +41,7 @@ class MCPServer:
         self.id_counter = 1
 
     def call(self, method: str, params: dict):
+        """Выполняет вызов метода на удаленном MCP-сервере."""
         payload = {
             "jsonrpc": "2.0",
             "id": self.id_counter,
@@ -24,147 +49,254 @@ class MCPServer:
             "params": params
         }
         self.id_counter += 1
-        logging.info(f"MCP_CLIENT -> {self.name}: method={method}, params={params}")
+        
+        # ИСПРАВЛЕНО: Используем очищенные данные для логирования
+        log_params = _sanitize_log_data(params)
+        logging.info(f"AGENT_CALL -> {self.name}: method={method}, params={json.dumps(log_params)}")
+        
         resp = requests.post(self.url, json=payload, headers=self.headers)
         resp.raise_for_status()
         data = resp.json()
         if "error" in data:
             raise RuntimeError(f"MCP {self.name} error: {data['error']['message']} (code: {data['error']['code']})")
-        logging.info(f"MCP_CLIENT <- {self.name}: result={data.get('result')}")
+        
+        # ИСПРАВЛЕНО: Логируем и результат тоже, предварительно очистив
+        log_result = _sanitize_log_data(data.get('result'))
+        logging.info(f"AGENT_CALL <- {self.name}: result={json.dumps(log_result)}")
+        
         return data.get("result")
 
 class AIWithMCPInterface(QtCore.QObject):
+    """
+    Универсальный "движок" для ИИ-агентов. Может быть настроен как Оркестратор
+    или как узкоспециализированный суб-агент с помощью разных промптов и наборов инструментов.
+    """
     action_started = QtCore.pyqtSignal(str)
 
-    def __init__(self, client: OpenAI):
+    # ### ИЗМЕНЕНО: Конструктор теперь принимает путь к промпту и фильтры ###
+    def __init__(self, client: OpenAI, prompt_path: str, all_mcp_servers: dict, allowed_mcp_filter: list = None):
+        """
+        Инициализирует агента.
+        :param client: Клиент OpenAI.
+        :param prompt_path: Путь к текстовому файлу с системным промптом.
+        :param all_mcp_servers: Словарь ВСЕХ доступных MCP-серверов в системе.
+        :param allowed_mcp_filter: Список ключей MCP (например, ['rpg', 'files']), которые
+                                   разрешено использовать ЭТОМУ конкретному агенту.
+                                   Если None, разрешены все.
+        """
         super().__init__()
         load_dotenv()
         self.client = client
         self._load_model()
+        self.system_prompt = self._load_prompt(prompt_path)
+        
+        # Этот словарь содержит все возможные MCP.
+        self.ALL_MCP_SERVERS = all_mcp_servers
+        
+        # А эти словари - только те, что разрешены данному агенту.
         self.mcp_servers = {}
         self.functions = []
         self._function_to_server_map = {}
+        
+        # ### НОВОЕ: Локальные инструменты, определенные в коде, а не через MCP ###
+        # Оркестратор будет использовать это для вызова суб-агентов.
+        self.local_tools = {
+            "execute_rpg_task": self.execute_rpg_task
+        }
+        self.local_tools_schema = [
+            {
+                "name": "execute_rpg_task",
+                "description": "Делегирует сложную задачу, связанную с ролевой игрой (RPG), специализированному RPG-агенту. Используй для ВСЕХ RPG-запросов.",
+                "parameters": {
+                    "type": "object", 
+                    "properties": {
+                        "task_description": {
+                            "type": "string", 
+                            "description": "Четкое и полное описание задачи для RPG-агента. Например: 'Узнай, где находится игрок и что он видит'."
+                        }
+                    }, 
+                    "required": ["task_description"]
+                }
+            },
+            {
+                "name": "show_image_in_chat",
+                "description": "Показывает пользователю изображение прямо в окне чата. Используй эту функцию, когда пользователь просит что-то показать, или когда визуальное представление информации будет полезно. Всегда предоставляй прямой URL изображения.",
+                "parameters": {
+                    "type": "object", 
+                    "properties": {
+                        "image_url": {
+                            "type": "string", 
+                            "description": "Прямая ссылка (URL) на изображение (например, с окончанием .jpg, .png, .webp)."
+                        },
+                        "caption": {
+                            "type": "string",
+                            "description": "Краткое описание того, что изображено на картинке."
+                        }
+                    }, 
+                    "required": ["image_url", "caption"]
+                }
+            }
+        ]
+        
+        # Регистрируем разрешенные MCP
+        self._register_allowed_mcps(allowed_mcp_filter)
+
 
     def _load_model(self):
         load_dotenv(override=True)
         self.model = os.getenv("SELECTED_MODEL", "openai/gpt-4o")
 
-    def register_mcp(self, name: str, url: str, headers=None):
-        # ... (код без изменений) ...
+    def _load_prompt(self, prompt_path):
+        """Загружает системный промпт из файла."""
         try:
-            logging.info(f"Регистрируем MCP '{name}' по адресу {url}...")
-            functions_url = url.rstrip("/") + "/functions"
-            resp = requests.get(functions_url, timeout=5)
-            resp.raise_for_status()
-            mcp_functions = resp.json()
-            self.mcp_servers[name] = MCPServer(name, url, headers)
-            self.functions.extend(mcp_functions)
-            registered_names = [func['name'] for func in mcp_functions]
-            for func_name in registered_names:
-                self._function_to_server_map[func_name] = name
-            logging.info(f"MCP '{name}' успешно зарегистрирован с функциями: {registered_names}")
-        except requests.exceptions.RequestException as e:
-            logging.error(f"Не удалось подключиться к MCP '{name}' по адресу {url}. Ошибка: {e}")
-        except Exception as e:
-            logging.error(f"Ошибка при регистрации MCP '{name}': {e}")
-    
-    
+            with open(prompt_path, 'r', encoding='utf-8') as f:
+                return f.read()
+        except FileNotFoundError:
+            logging.error(f"Критическая ошибка: Файл промпта не найден по пути: {prompt_path}")
+            # Возвращаем простой промпт по умолчанию, чтобы избежать падения
+            return "Ты — полезный ассистент."
+
+    def _register_allowed_mcps(self, filter_list: list = None):
+        """
+        Регистрирует только те MCP, которые разрешены фильтром.
+        """
+        # Если фильтр не задан, разрешаем все MCP.
+        if filter_list is None:
+            filter_list = self.ALL_MCP_SERVERS.keys()
+
+        for name, url in self.ALL_MCP_SERVERS.items():
+            if name in filter_list:
+                try:
+                    logging.info(f"Агент регистрирует MCP '{name}'...")
+                    functions_url = url.rstrip("/") + "/functions"
+                    resp = requests.get(functions_url, timeout=5)
+                    resp.raise_for_status()
+                    
+                    mcp_functions = resp.json()
+                    
+                    self.mcp_servers[name] = MCPServer(name, url)
+                    self.functions.extend(mcp_functions)
+                    for func in mcp_functions:
+                        self._function_to_server_map[func['name']] = name
+                except Exception as e:
+                    logging.error(f"Ошибка при регистрации MCP '{name}' для агента: {e}")
+
+    # ### НОВОЕ: Реализация локального инструмента ###
+    def execute_rpg_task(self, params: dict) -> str:
+        """
+        Метод-инструмент. Создает и запускает узкоспециализированного RPG-агента.
+        Вызывается Оркестратором.
+        """
+        task_description = params.get("task_description")
+        if not task_description:
+            return "Ошибка: задача для RPG-агента не была предоставлена."
+
+        logging.info(f"--- [DELEGATING TO RPG AGENT] --- Задача: {task_description}")
+        self.action_started.emit("Запускаю RPG-агента для выполнения задачи...")
+
+        # 1. Создаем экземпляр RPG-агента
+        rpg_agent = AIWithMCPInterface(
+            client=self.client,
+            prompt_path="prompts/rpg_agent_prompt.txt",
+            all_mcp_servers=self.ALL_MCP_SERVERS,
+            allowed_mcp_filter=["rpg"] # <-- Ключевой момент: разрешаем ему только RPG-инструменты
+        )
+        
+        # 2. Убираем у суб-агента возможность вызывать других суб-агентов, чтобы избежать рекурсии
+        rpg_agent.local_tools = {}
+        rpg_agent.local_tools_schema = []
+        
+        # 3. Запускаем его с одной единственной задачей от Оркестратора
+        initial_history = [{"role": "user", "content": task_description}]
+        result = rpg_agent.call_ai(initial_history)
+        
+        logging.info(f"--- [RPG AGENT FINISHED] --- Результат: {result}")
+        self.action_started.emit("RPG-агент завершил работу.")
+        
+        # 4. Возвращаем текстовый результат как итог работы нашего инструмента
+        return result
+
+    def show_image_in_chat(self, params: dict) -> str:
+        """
+        Этот метод не выполняет логику сам, а форматирует специальную команду для GUI,
+        которая будет перехвачена и обработана в UI.py.
+        """
+        url = params.get("image_url")
+        caption = params.get("caption", "Изображение от ИИ")
+
+        # Формируем специальный JSON-ответ, который распознает GUI
+        gui_command = {
+            "gui_tool": "display_image",
+            "params": {
+                "url": url,
+                "caption": caption
+            }
+        }
+        logging.info(f"Агент сгенерировал команду для GUI: {gui_command}")
+        # Возвращаем эту строку. UI.py ее поймает.
+        return json.dumps(gui_command)
 
     def call_ai(self, history: list, **kwargs) -> str:
+        """Основной цикл работы агента."""
         self._load_model()
-        system_prompt = {
-            "role": "system",
-            "content": """Ты — 'Master Control Program' (MCP), продвинутый ИИ-ассистент, способный управлять компьютером с помощью инструментов.
-
-### ТВОИ ДВА РЕЖИМА РАБОТЫ
-
-1.  **Режим Чат-бота:** Если запрос пользователя простой и не требует использования инструментов (например, "привет", "как дела?", "спасибо"), **НЕМЕДЛЕННО дай прямой текстовый ответ**, как обычный чат-бот. Твой ответ должен быть только в поле `content`.
-
-2.  **Режим Агента:** Если для ответа на запрос нужно выполнить действия (работа с файлами, веб, RPG, памятью), ты должен использовать инструменты.
-
-### ПРАВИЛА РЕЖИМА АГЕНТА
-
--   **Цикл Действий:** Ты работаешь в цикле: анализируешь запрос -> вызываешь один или несколько инструментов (`tool_calls`) -> получаешь результат -> анализируешь результат и планируешь следующий шаг.
--   **ИСПОЛЬЗУЙ РЕАЛЬНЫЕ ДАННЫЕ:** НИКОГДА не придумывай аргументы для функций (ID, пути к файлам и т.д.). Всегда бери их ИСКЛЮЧИТЕЛЬНО из результатов вызова других функций или изначального запроса. Если данных нет — сначала получи их (например, через `list_files` или `list_saves`).
--   **"Память" и "Знания"** — это всегда вызовы функций из MCP Semantic Memory (`recall`, `find_entity_by_label` и т.д.).
--   **"Текущее время/дата"** — это всегда вызов функции `get_current_time`.
-
-### ЗОЛОТОЕ ПРАВИЛО: КАК ЗАВЕРШАТЬ РАБОТУ
-
--   Твои ответы с `tool_calls` — это **внутренняя логика**. Пользователь их не видит.
--   Когда ты выполнил все необходимые действия и готов дать финальный, исчерпывающий ответ на **изначальный** запрос пользователя, твой **ПОСЛЕДНИЙ** ответ должен быть другим:
-    1.  **Сформулируй полный, вежливый и понятный для человека ответ.**
-    2.  Помести этот ответ в поле `content`.
-    3.  **В этом последнем ответе НЕ ДОЛЖНО БЫТЬ `tool_calls`.**
-
-Система поймет, что раз `tool_calls` отсутствуют, то работа завершена, и покажет твой `content` пользователю. **НИКОГДА не пиши слова "Мысль:" или "FINAL THOUGHT:" в финальном ответе.**
-"""
-        }
+        messages = [{"role": "system", "content": self.system_prompt}] + history
         
-        messages = [system_prompt] + history
-
-        # --- ПЕРВЫЙ ВЫЗОВ К LLM ---
-        logging.info(f"Вызов ИИ (начало работы). История: {len(messages)} сообщений.")
-        resp = self.client.chat.completions.create(model=self.model, messages=messages, tools=[{"type": "function", "function": f} for f in self.functions], tool_choice="auto", **kwargs)
-        message_obj = resp.choices[0].message
-        message_dict = {"role": message_obj.role, "content": message_obj.content, "tool_calls": message_obj.tool_calls}
+        # Агент видит только разрешенные ему инструменты
+        available_tools = self.functions + self.local_tools_schema
         
-        # --- ПРОВЕРКА РЕЖИМА ---
-        if not message_obj.tool_calls and message_obj.content:
-            logging.info("ИИ выбрал Режим Чат-бота. Возвращаю прямой ответ.")
-            self.action_started.emit("") 
-            return message_obj.content
-
-        messages.append(json.loads(message_obj.model_dump_json(exclude_none=True)))
-        logging.info("ИИ вошел в Режим Агента.")
-
-        # --- ЦИКЛ РЕЖИМА АГЕНТА ---
-        MAX_AGENT_TURNS = 8
+        MAX_AGENT_TURNS = 10 # Ограничение, чтобы избежать бесконечных циклов
         for i in range(MAX_AGENT_TURNS):
-            logging.info(f"Режим Агента (итерация {i+1}). История: {len(messages)} сообщений.")
-
-            last_message = messages[-1]
-            # --- ИЗМЕНЕННАЯ ЛОГИКА ЗАВЕРШЕНИЯ ---
-            # Если в последнем ответе ИИ нет вызовов инструментов, А ЕСТЬ текстовый контент,
-            # то это и есть наш финальный ответ!
-            if not last_message.get("tool_calls") and last_message.get("content"):
-                logging.info("ИИ завершил работу и предоставил финальный текстовый ответ.")
-                self.action_started.emit("")
-                return last_message["content"]
-
-            if "tool_calls" not in last_message:
-                logging.warning("ИИ завершил работу, не предоставив ни ответа, ни вызова инструмента. Возвращаем стандартный ответ.")
-                break # Выходим из цикла, чтобы сработала логика ниже
+            logging.info(f"Агент (итерация {i+1}). История: {len(messages)} сообщений.")
             
-            # Обработка вызовов инструментов
-            tool_calls = last_message["tool_calls"]
-            for tool_call in tool_calls:
-                function_call = tool_call["function"]
-                name, arguments_str = function_call["name"], function_call["arguments"]
-                self.action_started.emit(f"Выполняю: {name}(...)")
-                try:
-                    args = json.loads(arguments_str)
-                    result = self.call_mcp(name, args)
-                except Exception as e:
-                    logging.error(f"Ошибка при вызове MCP '{name}': {e}")
-                    result = {"error": str(e)}
-                messages.append({"role": "tool", "tool_call_id": tool_call["id"], "name": name, "content": json.dumps(result, ensure_ascii=False)})
+            # Вызов LLM
+            response = self.client.chat.completions.create(
+                model=self.model, 
+                messages=messages, 
+                tools=[{"type": "function", "function": f} for f in available_tools], 
+                tool_choice="auto", 
+                **kwargs
+            )
+            message_obj = response.choices[0].message
             
-            # Следующий вызов к LLM
-            logging.info(f"Вызов ИИ для следующей итерации. История: {len(messages)} сообщений.")
-            resp = self.client.chat.completions.create(model=self.model, messages=messages, tools=[{"type": "function", "function": f} for f in self.functions], tool_choice="auto", **kwargs)
-            message_obj = resp.choices[0].message
+            # Если нет вызова инструментов, а есть текст - это финальный ответ
+            if not message_obj.tool_calls and message_obj.content:
+                logging.info("Агент завершил работу и предоставил финальный текстовый ответ.")
+                self.action_started.emit("") # Очищаем статус
+                return message_obj.content
+
+            # Добавляем ответ модели в историю
             messages.append(json.loads(message_obj.model_dump_json(exclude_none=True)))
+            
+            # Проверяем, есть ли что выполнять
+            if not message_obj.tool_calls:
+                logging.warning("Агент завершил работу без ответа или вызова инструмента.")
+                break
 
-        # Если вышли из цикла по таймауту или другой причине
-        logging.warning("Достигнут лимит итераций Режима Агента или ИИ не смог дать финальный ответ.")
-        self.action_started.emit("")
-        return "Задача выполнена, но у меня возникли трудности с формулировкой финального ответа. Проверьте логи для деталей."
+            # Обрабатываем вызовы инструментов
+            for tool_call in message_obj.tool_calls:
+                func_name = tool_call.function.name
+                try:
+                    func_args = json.loads(tool_call.function.arguments)
+                except json.JSONDecodeError:
+                    result = f"Ошибка: неверный JSON в аргументах для функции {func_name}."
+                    messages.append({"role": "tool", "tool_call_id": tool_call.id, "name": func_name, "content": result})
+                    continue
 
-    def call_mcp(self, function_name: str, params: dict):
-        server_name = self._function_to_server_map.get(function_name)
-        if not server_name:
-            raise KeyError(f"Нет зарегистрированного MCP-сервера для функции «{function_name}»")
-        
-        logging.info(f"Маршрутизация вызова '{function_name}' на MCP-сервер '{server_name}'")
-        return self.mcp_servers[server_name].call(function_name, params)
+                tool_call_id = tool_call.id
+                result = None
+
+                # Выбираем, какой инструмент вызвать: локальный или удаленный MCP
+                if func_name in self.local_tools:
+                    self.action_started.emit(f"Выполняю задачу: {func_name}...")
+                    result = self.local_tools[func_name](func_args)
+                elif func_name in self._function_to_server_map:
+                    self.action_started.emit(f"Вызываю MCP: {func_name}...")
+                    server_name = self._function_to_server_map[func_name]
+                    result = self.mcp_servers[server_name].call(func_name, func_args)
+                else:
+                    result = f"Критическая ошибка: инструмент '{func_name}' не найден в доступных для этого агента."
+
+                messages.append({"role": "tool", "tool_call_id": tool_call_id, "name": func_name, "content": json.dumps(result, ensure_ascii=False)})
+
+        logging.warning("Достигнут лимит итераций, или агент не смог дать финальный ответ.")
+        return "К сожалению, я не смог завершить задачу. Попробуйте переформулировать запрос."
