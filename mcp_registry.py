@@ -48,6 +48,12 @@ MCP_REGISTRY = {
         "port_env": "MCP_SEMANTIC_MEMORY_PORT", 
         "default_port": "8007"
     },
+    "rpg": {
+    "name": "RPG Engine (Ролевые игры)", 
+    "script": "mcp_rpg.py", 
+    "port_env": "MCP_RPG_PORT", 
+    "default_port": "8008"
+    },
     # --- Сюда можно добавлять новые MCP в будущем ---
     # "new_mcp": {
     #     "name": "My New MCP",

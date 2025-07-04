@@ -68,164 +68,98 @@ class AIWithMCPInterface(QtCore.QObject):
         except Exception as e:
             logging.error(f"Ошибка при регистрации MCP '{name}': {e}")
     
-    def _summarize_for_user(self, conversation_history: list) -> str:
-        self.action_started.emit("Формулирую итоговый ответ...")
-        
-        # Теперь эта строка будет работать, т.к. в history только словари
-        messages_for_summary = [msg for msg in conversation_history if msg.get("role") != "system"]
-        
-        summary_prompt = {
-            "role": "system",
-            "content": """Ты — дружелюбный ИИ-ассистент. Твоя задача — дать ПОНЯТНЫЙ И СУЩЕСТВЕННЫЙ ответ ПОЛЬЗОВАТЕЛЮ на его САМЫЙ ПЕРВЫЙ запрос, используя всю информацию из истории диалога и вызовов функций.
-
--   **Ответь на вопрос пользователя напрямую.**
--   **Не описывай свой рабочий процесс, вызовы функций или внутренние мысли.**
--   **Просто предоставь результат, который запросил пользователь, в вежливой и краткой форме.**
--   **Если задача выполнена, подтверди это.**
--   **Если задача не выполнена или возникли проблемы, вежливо сообщи об этом и, если возможно, объясни почему (кратко).**
-
-Пример:
-Если пользователь спросил "О чем последние сообщения в чате X?", а ты прочитал их и выяснил тему, твой ответ должен быть: "В чате X обсуждается [тема]." (А не: "Я выполнил функцию read_messages и узнал, что...").
-"""
-        }
-        messages_for_summary.insert(0, summary_prompt)
-
-        try:
-            response = self.client.chat.completions.create(
-                model=self.model,
-                messages=messages_for_summary,
-            )
-            final_answer = response.choices[0].message.content
-        except Exception as e:
-            logging.error(f"Ошибка при суммаризации ответа: {e}")
-            final_answer = "Задача выполнена, но у меня возникли трудности с формулировкой финального ответа."
-            
-        return final_answer.strip()
+    
 
     def call_ai(self, history: list, **kwargs) -> str:
         self._load_model()
         system_prompt = {
             "role": "system",
-            "content": """Ты — 'Master Control Program' (MCP), продвинутый ИИ-ассистент.
+            "content": """Ты — 'Master Control Program' (MCP), продвинутый ИИ-ассистент, способный управлять компьютером с помощью инструментов.
 
-### ДВА РЕЖИМА РАБОТЫ:
-1.  **Режим Чат-бота:** Если запрос пользователя простой, не требует использования инструментов (например, приветствие, прощание, общая информация, комплимент), **Сразу дай прямой текстовый ответ**, как обычный чат-бот. НЕ используй формат "Мысль" и "Действие", НЕ вызывай инструменты.
-2.  **Режим Агента:** Если запрос требует использования инструментов (работа с файлами, веб, Telegram, памятью), переходи в пошаговый цикл "Мысль -> Действие".
+### ТВОИ ДВА РЕЖИМА РАБОТЫ
 
-### РЕЖИМ АГЕНТА: ПРИНЦИПЫ
--   **Твоя главная задача:** Синтез информации для ответа на ПЕРВОНАЧАЛЬНЫЙ запрос.
--   **Контекст — это всё:** Вся история диалога — единый процесс.
--   **Содержимое > Метаданные:** Содержимое сообщения важнее его названия.
--   **Разрешение неоднозначности:** Если информации недостаточно, получи больше данных.
--   **ИСПОЛЬЗУЙ ТОЛЬКО РЕАЛЬНЫЕ РЕЗУЛЬТАТЫ:** НИКОГДА не "придумывай", что выполнил функцию.
--   **"БД", "Память", "Знания" == MCP Semantic Memory:** Используй `recall`, `find_entity_by_label`, `get_entity_details`.
--   **Текущее время/дата == get_current_time:** Используй функцию `get_current_time` для запросов о времени и дате. НЕ пытайся "угадать" время.
--   **Цикл:** Проанализируй историю -> Напиши "Мысль" (только текст) -> Выполни "Действие" (вызов инструмента) -> Повторяй.
--   **Завершение Режима Агента:** Когда готов дать полный ответ на ПЕРВОНАЧАЛЬНЫЙ запрос, просто напиши финальную "Мысль" с выводом (например, "FINAL THOUGHT: Я собрал всю информацию...") и НЕ вызывай инструменты. Система поймет, что работа закончена, и сгенерирует ответ для пользователя.
+1.  **Режим Чат-бота:** Если запрос пользователя простой и не требует использования инструментов (например, "привет", "как дела?", "спасибо"), **НЕМЕДЛЕННО дай прямой текстовый ответ**, как обычный чат-бот. Твой ответ должен быть только в поле `content`.
 
-### ЗОЛОТОЕ ПРАВИЛО:
-- **НИКОГДА НЕ ОБЩАЙСЯ С ПОЛЬЗОВАТЕЛЕМ НАПРЯМУЮ В РЕЖИМЕ АГЕНТА.** Все твои "Мысли" и "Действия" предназначены для внутренней логики, пользователь их не видит. Только финальный ответ, сгенерированный после завершения твоего цикла.
-- **НИКОГДА НЕ ПРИДУМЫВАЙ АРГУМЕНТЫ:** ID, пути к файлам и т.д. должны быть взяты ИСКЛЮЧИТЕЛЬНО из результатов вызова других функций.
+2.  **Режим Агента:** Если для ответа на запрос нужно выполнить действия (работа с файлами, веб, RPG, памятью), ты должен использовать инструменты.
+
+### ПРАВИЛА РЕЖИМА АГЕНТА
+
+-   **Цикл Действий:** Ты работаешь в цикле: анализируешь запрос -> вызываешь один или несколько инструментов (`tool_calls`) -> получаешь результат -> анализируешь результат и планируешь следующий шаг.
+-   **ИСПОЛЬЗУЙ РЕАЛЬНЫЕ ДАННЫЕ:** НИКОГДА не придумывай аргументы для функций (ID, пути к файлам и т.д.). Всегда бери их ИСКЛЮЧИТЕЛЬНО из результатов вызова других функций или изначального запроса. Если данных нет — сначала получи их (например, через `list_files` или `list_saves`).
+-   **"Память" и "Знания"** — это всегда вызовы функций из MCP Semantic Memory (`recall`, `find_entity_by_label` и т.д.).
+-   **"Текущее время/дата"** — это всегда вызов функции `get_current_time`.
+
+### ЗОЛОТОЕ ПРАВИЛО: КАК ЗАВЕРШАТЬ РАБОТУ
+
+-   Твои ответы с `tool_calls` — это **внутренняя логика**. Пользователь их не видит.
+-   Когда ты выполнил все необходимые действия и готов дать финальный, исчерпывающий ответ на **изначальный** запрос пользователя, твой **ПОСЛЕДНИЙ** ответ должен быть другим:
+    1.  **Сформулируй полный, вежливый и понятный для человека ответ.**
+    2.  Помести этот ответ в поле `content`.
+    3.  **В этом последнем ответе НЕ ДОЛЖНО БЫТЬ `tool_calls`.**
+
+Система поймет, что раз `tool_calls` отсутствуют, то работа завершена, и покажет твой `content` пользователю. **НИКОГДА не пиши слова "Мысль:" или "FINAL THOUGHT:" в финальном ответе.**
 """
         }
         
         messages = [system_prompt] + history
 
         # --- ПЕРВЫЙ ВЫЗОВ К LLM ---
-        # На этом этапе ИИ должен решить, какой режим использовать.
         logging.info(f"Вызов ИИ (начало работы). История: {len(messages)} сообщений.")
-        resp = self.client.chat.completions.create(
-            model=self.model,
-            messages=messages,
-            tools=[{"type": "function", "function": f} for f in self.functions],
-            # На первом шаге даем ему выбор: ответить текстом (none) или вызвать инструмент (auto)
-            tool_choice="auto", # Модель сама решит, нужен ли инструмент
-            **kwargs
-        )
+        resp = self.client.chat.completions.create(model=self.model, messages=messages, tools=[{"type": "function", "function": f} for f in self.functions], tool_choice="auto", **kwargs)
         message_obj = resp.choices[0].message
-        message_dict = {"role": message_obj.role}
-        if message_obj.content:
-            message_dict["content"] = message_obj.content
-        if message_obj.tool_calls:
-             message_dict["tool_calls"] = [{"id": tc.id, "type": tc.type, "function": {"name": tc.function.name, "arguments": tc.function.arguments}} for tc in message_obj.tool_calls]
+        message_dict = {"role": message_obj.role, "content": message_obj.content, "tool_calls": message_obj.tool_calls}
         
         # --- ПРОВЕРКА РЕЖИМА ---
-        # Если нет вызова инструментов И ЕСТЬ текстовое содержимое,
-        # считаем, что ИИ выбрал Режим Чат-бота.
         if not message_obj.tool_calls and message_obj.content:
             logging.info("ИИ выбрал Режим Чат-бота. Возвращаю прямой ответ.")
-            self.action_started.emit("") # Очищаем статус
-            return message_obj.content # Возвращаем его текст напрямую, без суммаризации
-            
-        # Если есть вызов инструментов ИЛИ нет текстового содержимого (редкий случай),
-        # считаем, что ИИ вошел в Режим Агента. Добавляем его первый ответ в историю
-        # и продолжаем цикл ReAct.
-        messages.append(message_dict)
+            self.action_started.emit("") 
+            return message_obj.content
+
+        messages.append(json.loads(message_obj.model_dump_json(exclude_none=True)))
         logging.info("ИИ вошел в Режим Агента.")
 
         # --- ЦИКЛ РЕЖИМА АГЕНТА ---
-        # Этот цикл будет обрабатывать последовательные шаги "Мысль -> Действие -> Результат"
-        MAX_AGENT_TURNS = 8 # Ограничим количество итераций в режиме агента
+        MAX_AGENT_TURNS = 8
         for i in range(MAX_AGENT_TURNS):
-             logging.info(f"Режим Агента (итерация {i+1}). История: {len(messages)} сообщений.")
+            logging.info(f"Режим Агента (итерация {i+1}). История: {len(messages)} сообщений.")
 
-             # Если на текущей итерации агент не вернул tool_calls, это его финальная "Мысль".
-             # Мы выходим из цикла и запускаем суммаризатор.
-             if "tool_calls" not in messages[-1]: # Проверяем последний добавленный message_dict
-                 logging.info("ИИ завершил работу в Режиме Агента. Запускаю суммаризацию.")
-                 self.action_started.emit("")
-                 return self._summarize_for_user(messages)
-             
-             # Обрабатываем вызовы инструментов из последнего ответа
-             tool_calls = messages[-1]["tool_calls"]
+            last_message = messages[-1]
+            # --- ИЗМЕНЕННАЯ ЛОГИКА ЗАВЕРШЕНИЯ ---
+            # Если в последнем ответе ИИ нет вызовов инструментов, А ЕСТЬ текстовый контент,
+            # то это и есть наш финальный ответ!
+            if not last_message.get("tool_calls") and last_message.get("content"):
+                logging.info("ИИ завершил работу и предоставил финальный текстовый ответ.")
+                self.action_started.emit("")
+                return last_message["content"]
 
-             for tool_call in tool_calls:
-                 function_call = tool_call["function"]
-                 name = function_call["name"]
-                 arguments_str = function_call["arguments"]
-                 tool_call_id = tool_call["id"]
-                 
-                 try:
-                     args = json.loads(arguments_str)
-                 except json.JSONDecodeError:
-                     error_content = f'{{"error": "Invalid JSON format in arguments: {arguments_str}"}}'
-                     messages.append({"role": "tool", "tool_call_id": tool_call_id, "name": name, "content": error_content})
-                     continue
-
-                 user_message = f"Выполняю: {name}({json.dumps(args, ensure_ascii=False)})"
-                 self.action_started.emit(user_message)
-                 
-                 try:
-                     result = self.call_mcp(name, args)
-                 except Exception as e:
-                     logging.error(f"Ошибка при вызове MCP '{name}': {e}")
-                     result = {"error": str(e)}
-
-                 messages.append({"role": "tool", "tool_call_id": tool_call_id, "name": name, "content": json.dumps(result, ensure_ascii=False)})
+            if "tool_calls" not in last_message:
+                logging.warning("ИИ завершил работу, не предоставив ни ответа, ни вызова инструмента. Возвращаем стандартный ответ.")
+                break # Выходим из цикла, чтобы сработала логика ниже
             
-             # После обработки всех tool_calls в текущей итерации, делаем следующий вызов к LLM
-             # с обновленной историей (включающей результаты выполнения инструментов)
-             logging.info(f"Вызов ИИ для следующей итерации Режима Агента. История: {len(messages)} сообщений.")
-             resp = self.client.chat.completions.create(
-                model=self.model,
-                messages=messages,
-                tools=[{"type": "function", "function": f} for f in self.functions],
-                tool_choice="auto", # Даем ему возможность вызвать еще один инструмент или завершить работу
-                **kwargs
-             )
-             message_obj = resp.choices[0].message
-             message_dict = {"role": message_obj.role}
-             if message_obj.content:
-                 message_dict["content"] = message_obj.content
-             if message_obj.tool_calls:
-                  message_dict["tool_calls"] = [{"id": tc.id, "type": tc.type, "function": {"name": tc.function.name, "arguments": tc.function.arguments}} for tc in message_obj.tool_calls]
+            # Обработка вызовов инструментов
+            tool_calls = last_message["tool_calls"]
+            for tool_call in tool_calls:
+                function_call = tool_call["function"]
+                name, arguments_str = function_call["name"], function_call["arguments"]
+                self.action_started.emit(f"Выполняю: {name}(...)")
+                try:
+                    args = json.loads(arguments_str)
+                    result = self.call_mcp(name, args)
+                except Exception as e:
+                    logging.error(f"Ошибка при вызове MCP '{name}': {e}")
+                    result = {"error": str(e)}
+                messages.append({"role": "tool", "tool_call_id": tool_call["id"], "name": name, "content": json.dumps(result, ensure_ascii=False)})
+            
+            # Следующий вызов к LLM
+            logging.info(f"Вызов ИИ для следующей итерации. История: {len(messages)} сообщений.")
+            resp = self.client.chat.completions.create(model=self.model, messages=messages, tools=[{"type": "function", "function": f} for f in self.functions], tool_choice="auto", **kwargs)
+            message_obj = resp.choices[0].message
+            messages.append(json.loads(message_obj.model_dump_json(exclude_none=True)))
 
-             messages.append(message_dict) # Добавляем его новый ответ в историю
-
-        # Если достигнут лимит итераций Режима Агента
-        logging.warning("Достигнут лимит итераций Режима Агента. Принудительно запускаю суммаризацию.")
+        # Если вышли из цикла по таймауту или другой причине
+        logging.warning("Достигнут лимит итераций Режима Агента или ИИ не смог дать финальный ответ.")
         self.action_started.emit("")
-        return self._summarize_for_user(messages)
+        return "Задача выполнена, но у меня возникли трудности с формулировкой финального ответа. Проверьте логи для деталей."
 
     def call_mcp(self, function_name: str, params: dict):
         server_name = self._function_to_server_map.get(function_name)

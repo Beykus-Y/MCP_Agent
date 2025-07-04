@@ -138,6 +138,14 @@ class LauncherWindow(QtWidgets.QWidget):
         main_app_layout.addWidget(self.launch_main_button)
         main_app_layout.addWidget(info_label, alignment=QtCore.Qt.AlignCenter)
         main_app_box.setLayout(main_app_layout)
+
+        #6 Визуализатор
+        visualizer_box = QtWidgets.QGroupBox("5. RPG Инструменты")
+        visualizer_layout = QtWidgets.QHBoxLayout()
+        self.launch_visualizer_button = QtWidgets.QPushButton("Запустить Визуализатор RPG")
+        self.launch_visualizer_button.clicked.connect(self.launch_visualizer)
+        visualizer_layout.addWidget(self.launch_visualizer_button)
+        visualizer_box.setLayout(visualizer_layout)
         
         # Компоновка
         main_layout.addWidget(mcp_selection_box)
@@ -145,6 +153,7 @@ class LauncherWindow(QtWidgets.QWidget):
         main_layout.addWidget(control_box)
         main_layout.addWidget(log_box, stretch=1)
         main_layout.addWidget(main_app_box)
+        main_layout.addWidget(visualizer_box)
 
     # --- НОВЫЕ МЕТОДЫ для работы с .env ---
     def load_settings(self):
@@ -278,6 +287,20 @@ class LauncherWindow(QtWidgets.QWidget):
             self.log("[OK] Главный GUI запущен в отдельном процессе.")
         except Exception as e:
             self.log(f"[ОШИБКА] Не удалось запустить main.py: {e}")
+        
+    
+    def launch_visualizer(self):
+        """Запускает скрипт визуализатора в отдельном процессе."""
+        self.log("--- [ЗАПУСК] Запускаем Визуализатор RPG ---")
+        if "rpg" not in self.running_mcps:
+            QtWidgets.QMessageBox.warning(self, "Ошибка", "Для запуска визуализатора необходимо сначала запустить 'RPG Engine' MCP.")
+            self.log("[ОШИБКА] Попытка запуска визуализатора без запущенного MCP_RPG.")
+            return
+        try:
+            subprocess.Popen([sys.executable, "rpg_visualizer.py"])
+            self.log("[OK] Визуализатор запущен в отдельном процессе.")
+        except Exception as e:
+            self.log(f"[ОШИБКА] Не удалось запустить rpg_visualizer.py: {e}")
 
     def closeEvent(self, event):
         # Если мы УЖЕ в процессе закрытия, просто даем окну закрыться
