@@ -101,7 +101,9 @@ class AIWithMCPInterface(QtCore.QObject):
         # ### НОВОЕ: Локальные инструменты, определенные в коде, а не через MCP ###
         # Оркестратор будет использовать это для вызова суб-агентов.
         self.local_tools = {
-            "execute_rpg_task": self.execute_rpg_task
+            "execute_rpg_task": self.execute_rpg_task,
+            "show_image_in_chat": self.show_image_in_chat
+            # ... другие инструменты :
         }
         self.local_tools_schema = [
             {
@@ -117,11 +119,6 @@ class AIWithMCPInterface(QtCore.QObject):
                     }, 
                     "required": ["task_description"]
                 }
-            },
-            {
-                "name": "show_image_in_chat",
-                "description": "Показывает пользователю изображение прямо в окне чата. Используй эту функцию, когда пользователь просит что-то показать, или когда визуальное представление информации будет полезно. Всегда предоставляй прямой URL изображения.",
-                "parameters": {"type": "object", "properties": {"image_url": {"type": "string", "description": "Прямая ссылка (URL) на изображение."}, "caption": {"type": "string", "description": "Краткое описание того, что изображено на картинке."}}, "required": ["image_url", "caption"]}
             },
             {
                 "name": "show_image_in_chat",
@@ -344,6 +341,26 @@ class AIWithMCPInterface(QtCore.QObject):
                     result = self.mcp_servers[server_name].call(func_name, func_args)
                 else:
                     result = f"Критическая ошибка: инструмент '{func_name}' не найден в доступных для этого агента."
+
+                # ### НАЧАЛО ИСПРАВЛЕНИЯ ###
+                # Проверяем, не является ли результат вызова инструмента финальной командой для GUI.
+                # `show_image_in_chat` возвращает именно такую команду в виде JSON-строки.
+                is_gui_command = False
+                if isinstance(result, str):
+                    try:
+                        parsed_result = json.loads(result)
+                        if isinstance(parsed_result, dict) and "gui_tool" in parsed_result:
+                            is_gui_command = True
+                    except (json.JSONDecodeError, TypeError):
+                        pass # Это обычный строковый результат, а не JSON-команда.
+
+                if is_gui_command:
+                    # Если это команда для GUI - это и есть финальный ответ.
+                    # Немедленно возвращаем его, не продолжая цикл.
+                    logging.info("Агент сгенерировал финальную команду для GUI. Завершение работы.")
+                    self.action_started.emit("") # Очищаем статус
+                    return result # Возвращаем JSON-строку как есть
+                # ### КОНЕЦ ИСПРАВЛЕНИЯ ###
 
                 messages.append({"role": "tool", "tool_call_id": tool_call_id, "name": func_name, "content": json.dumps(result, ensure_ascii=False)})
 
