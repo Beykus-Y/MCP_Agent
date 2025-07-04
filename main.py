@@ -12,7 +12,7 @@ from PyQt5 import QtWidgets
 
 from UI import MainWindow
 from ai_interface import AIWithMCPInterface
-
+from mcp_registry import MCP_REGISTRY
 # НОВОЕ: Возвращаем нашу функцию для "умного" ожидания
 def wait_for_mcp_servers(servers_to_check, timeout=30):
     """
@@ -49,25 +49,34 @@ def wait_for_mcp_servers(servers_to_check, timeout=30):
 def main():
     load_dotenv()
     
-    # --- НАСТРОЙКА ---
-    # Определяем, какие серверы мы должны дождаться
-    servers_to_check = {
-        "files": f"http://127.0.0.1:{os.getenv('MCP_FILES_PORT', '8001')}",
-        "web": f"http://127.0.0.1:{os.getenv('MCP_WEB_PORT', '8002')}",
-        "shell": f"http://127.0.0.1:{os.getenv('MCP_SHELL_PORT', '8003')}",
-        "clipboard": f"http://127.0.0.1:{os.getenv('MCP_CLIPBOARD_PORT', '8004')}",
-        "telegram": f"http://127.0.0.1:{os.getenv('MCP_TELEGRAM_PORT', '8005')}",
-        "semantic_memory": f"http://127.0.0.1:{os.getenv('MCP_SEMANTIC_MEMORY_PORT', '8007')}",
-    }
+    active_mcps_str = os.getenv("ACTIVE_MCPS", "")
+    if not active_mcps_str:
+        logging.critical("Переменная ACTIVE_MCPS не найдена или пуста в .env файле.")
+        logging.critical("Пожалуйста, запустите приложение через launcher.py, чтобы выбрать и запустить MCP.")
+        sys.exit(1) # Завершаем работу, если неясно, какие MCP активны
+
+    active_mcp_keys = [key.strip() for key in active_mcps_str.split(',')]
+    print(f"[MAIN] Активные MCP, согласно .env: {active_mcp_keys}")
+
+    # 2. Динамически строим словарь servers_to_check на основе реестра
+    servers_to_check = {}
+    for key in active_mcp_keys:
+        if key in MCP_REGISTRY:
+            config = MCP_REGISTRY[key]
+            port = os.getenv(config['port_env'], config['default_port'])
+            servers_to_check[key] = f"http://127.0.0.1:{port}"
+        else:
+            logging.warning(f"Неизвестный ключ MCP '{key}' найден в ACTIVE_MCPS, игнорируется.")
     
     # --- ОЖИДАНИЕ ---
     try:
+        # wait_for_mcp_servers теперь получает динамически созданный список
         wait_for_mcp_servers(servers_to_check)
     except RuntimeError as e:
         logging.critical(f"Критическая ошибка при запуске: {e}")
         sys.exit(1)
 
-    # --- ИНИЦИАЛИЗАЦИЯ ---
+    # --- ИНИЦИАЛИЗАЦИЯ (далее без существенных изменений) ---
     API_KEY  = os.getenv("OPENAI_API_KEY")
     API_BASE = os.getenv("OPENAI_API_BASE")
     client = OpenAI(api_key=API_KEY, base_url=API_BASE)
@@ -83,6 +92,7 @@ def main():
     ai_iface = AIWithMCPInterface(client)
     
     print("[MAIN] Попытка регистрации MCP-серверов...")
+    # Регистрация также теперь использует динамический список
     for name, url in servers_to_check.items():
         ai_iface.register_mcp(name, url)
     print("[MAIN] Регистрация завершена.")
