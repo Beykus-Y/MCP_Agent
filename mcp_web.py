@@ -1,4 +1,4 @@
-# mcp_web.py (Версия 4.2 - Финальная, с полным разделением обязанностей)
+# mcp_web.py (Версия 4.3 - Исправленная и упрощенная для ИИ)
 
 import os
 import json
@@ -21,7 +21,6 @@ def start_browser():
     if browser is None:
         print("[MCP_Web] Инициализация браузера Selenium...")
         try:
-            # Убедитесь, что chromedriver.exe находится в той же папке или прописан в системный PATH
             service = Service(executable_path='./chromedriver.exe')
             options = webdriver.ChromeOptions()
             options.add_argument('--headless')
@@ -66,7 +65,7 @@ def read_page_text(params):
         soup = BeautifulSoup(browser.page_source, "html.parser")
         for tag in soup(['script', 'style', 'nav', 'footer', 'header']):
             tag.decompose()
-        text = soup.get_text(separator='\n', strip=True)
+        text = soup.get_text(separator='\\n', strip=True)
         return {"title": browser.title, "text_summary": text[:4000] + ("..." if len(text) > 4000 else "")}
     except Exception as e:
         raise JsonRpcError(-32000, f"Ошибка при чтении текста страницы: {e}")
@@ -76,12 +75,14 @@ def find_images_on_page(params):
     if browser is None: raise JsonRpcError(-32001, "Браузер не запущен.")
     found_images = []
     try:
+        WebDriverWait(browser, 10).until(EC.visibility_of_any_elements_located((By.TAG_NAME, "img")))
         img_elements = browser.find_elements(By.TAG_NAME, "img")
-        for i, el in enumerate(img_elements):
+        for el in img_elements:
             if el.is_displayed() and el.size['width'] > 100 and el.size['height'] > 100:
                 src = el.get_attribute('src')
                 if src and src.startswith('http'):
-                    found_images.append({"id": f"image_{i}", "src": src, "alt": el.get_attribute('alt') or "Без описания"})
+                    # ИСПРАВЛЕНО: Возвращаем только нужные поля, чтобы не путать ИИ
+                    found_images.append({"src": src, "alt": el.get_attribute('alt') or "Без описания"})
     except Exception as e:
         raise JsonRpcError(-32000, f"Ошибка при поиске изображений: {e}")
     return {"images": found_images[:20]}
@@ -94,11 +95,13 @@ def get_interactive_elements(params):
         link_elements = browser.find_elements(By.XPATH, "//a[@href]")
         for i, el in enumerate(link_elements):
             if el.is_displayed() and el.text.strip(): elements.append({"id": f"link_{i}", "type": "link", "text": el.text.strip()})
+        
         input_elements = browser.find_elements(By.XPATH, "//input[@type='text' or @type='password' or @type='search' or @type='email'] | //textarea")
         for i, el in enumerate(input_elements):
             if el.is_displayed():
                 text = el.get_attribute('aria-label') or el.get_attribute('placeholder') or el.get_attribute('title') or f"Поле ввода {i}"
                 elements.append({"id": f"input_{i}", "type": "input", "text": text})
+
         button_elements = browser.find_elements(By.XPATH, "//button | //input[@type='submit' or @type='button']")
         for i, el in enumerate(button_elements):
             if el.is_displayed():
@@ -117,8 +120,10 @@ def click_element(params):
         el_type, el_index_str = element_id.split('_'); el_index = int(el_index_str)
         xpath_map = {'link': "//a[@href]", 'button': "//button | //input[@type='submit' or @type='button']"}
         if el_type not in xpath_map: raise JsonRpcError(-32602, "Неверный тип элемента.")
+        
         visible_elements = [el for el in browser.find_elements(By.XPATH, xpath_map[el_type]) if el.is_displayed()]
         if el_index >= len(visible_elements): raise IndexError("Индекс элемента вне диапазона.")
+        
         target_element = visible_elements[el_index]
         target_element.click()
         WebDriverWait(browser, 10).until(lambda d: d.execute_script('return document.readyState') == 'complete')
@@ -134,16 +139,18 @@ def type_in_element(params):
     try:
         el_type, el_index_str = element_id.split('_'); el_index = int(el_index_str)
         if el_type != 'input': raise JsonRpcError(-32602, "Тип элемента должен быть 'input'.")
+        
         xpath = "//input[@type='text' or @type='password' or @type='search' or @type='email'] | //textarea"
         visible_elements = [el for el in browser.find_elements(By.XPATH, xpath) if el.is_displayed()]
         if el_index >= len(visible_elements): raise IndexError("Индекс поля ввода вне диапазона.")
+        
         target_element = visible_elements[el_index]
         target_element.clear(); target_element.send_keys(text_to_type)
         return {"status": "ok"}
     except Exception as e:
         raise JsonRpcError(-32000, f"Ошибка ввода текста в {element_id}: {e}")
 
-# --- ОБНОВЛЕННЫЕ ОПИСАНИЯ ИНСТРУМЕНТОВ ---
+# --- ОПИСАНИЯ ИНСТРУМЕНТОВ ДЛЯ ИИ ---
 WEB_FUNCTIONS = [
     {
         "name": "navigate_to_url",
@@ -157,7 +164,7 @@ WEB_FUNCTIONS = [
     },
     {
         "name": "find_images_on_page",
-        "description": "Инструмент для ПОИСКА КАРТИНОК: сканирует текущую страницу и возвращает список URL-адресов изображений. Используй, если конечная цель — показать картинку пользователю.",
+        "description": "Инструмент для ПОИСКА КАРТИНОК: сканирует текущую страницу и возвращает список URL-адресов изображений с их описаниями. ВАЖНО: После получения списка, выбери первую релевантную картинку и сразу вызови `show_image_in_chat`, чтобы показать её пользователю.",
         "parameters": {"type": "object", "properties": {}}
     },
     {
@@ -195,5 +202,5 @@ def mcp_entrypoint():
 
 if __name__ == "__main__":
     port = int(os.getenv("MCP_WEB_PORT", 8002))
-    print(f"[*] MCP_Web (v4.2 - Финал) запускается на порту: {port} через Waitress.")
+    print(f"[*] MCP_Web (v4.3 - Исправленный) запускается на порту: {port} через Waitress.")
     serve(app, host="0.0.0.0", port=port)

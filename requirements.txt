@@ -5,6 +5,7 @@ requests
 flask
 beautifulsoup4
 lxml
+dotenv
 waitress
 selenium
 pyperclip

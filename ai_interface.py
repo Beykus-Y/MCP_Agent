@@ -121,6 +121,11 @@ class AIWithMCPInterface(QtCore.QObject):
             {
                 "name": "show_image_in_chat",
                 "description": "Показывает пользователю изображение прямо в окне чата. Используй эту функцию, когда пользователь просит что-то показать, или когда визуальное представление информации будет полезно. Всегда предоставляй прямой URL изображения.",
+                "parameters": {"type": "object", "properties": {"image_url": {"type": "string", "description": "Прямая ссылка (URL) на изображение."}, "caption": {"type": "string", "description": "Краткое описание того, что изображено на картинке."}}, "required": ["image_url", "caption"]}
+            },
+            {
+                "name": "show_image_in_chat",
+                "description": "Показывает пользователю изображение прямо в окне чата. Используй эту функцию, когда пользователь просит что-то показать, или когда визуальное представление информации будет полезно. Всегда предоставляй прямой URL изображения.",
                 "parameters": {
                     "type": "object", 
                     "properties": {
@@ -155,6 +160,48 @@ class AIWithMCPInterface(QtCore.QObject):
             logging.error(f"Критическая ошибка: Файл промпта не найден по пути: {prompt_path}")
             # Возвращаем простой промпт по умолчанию, чтобы избежать падения
             return "Ты — полезный ассистент."
+        
+    def find_and_show_image(self, params: dict) -> str:
+        """
+        Инструмент-обертка, который ищет картинку в вебе и вызывает другой инструмент для ее отображения.
+        """
+        query = params.get("query")
+        if not query:
+            return "Ошибка: поисковый запрос не предоставлен."
+
+        web_server = self.mcp_servers.get("web")
+        if not web_server:
+            return "Ошибка: MCP-сервер 'web' не доступен для этого агента."
+
+        try:
+            self.action_started.emit(f"Ищу картинку: {query}...")
+            # Шаг 1: Навигация (логика спрятана здесь)
+            search_url = f"https://www.google.com/search?q={requests.utils.quote(query)}&tbm=isch"
+            web_server.call("navigate_to_url", {"url": search_url})
+            
+            # Шаг 2: Поиск изображений
+            self.action_started.emit("Анализирую страницу с результатами...")
+            result = web_server.call("find_images_on_page", {})
+            
+            images = result.get("images")
+            if not images:
+                return "Не удалось найти подходящих изображений по вашему запросу."
+            
+            # Шаг 3: Парсинг результата и выбор картинки (логика спрятана здесь)
+            first_image = images[0]
+            image_url = first_image.get("src")
+            caption = first_image.get("alt", query)
+
+            if not image_url:
+                return "Найдено изображение, но у него нет URL."
+
+            self.action_started.emit("Отображаю найденное изображение...")
+            # Шаг 4: Вызов ДРУГОГО локального инструмента для формирования ответа для GUI
+            return self.show_image_in_chat({"image_url": image_url, "caption": caption})
+
+        except Exception as e:
+            logging.error(f"Ошибка в инструменте find_and_show_image: {e}")
+            return f"Произошла ошибка во время поиска изображения: {e}"
 
     def _register_allowed_mcps(self, filter_list: list = None):
         """
@@ -180,6 +227,8 @@ class AIWithMCPInterface(QtCore.QObject):
                         self._function_to_server_map[func['name']] = name
                 except Exception as e:
                     logging.error(f"Ошибка при регистрации MCP '{name}' для агента: {e}")
+
+    
 
     # ### НОВОЕ: Реализация локального инструмента ###
     def execute_rpg_task(self, params: dict) -> str:

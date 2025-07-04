@@ -80,10 +80,27 @@ async def _send_message(dialog_id, text):
     except Exception as e:
         return {"status": "error", "message": f"Произошла ошибка при отправке: {e}"}
 
-async def _list_dialogs():
+async def _list_dialogs(limit=15):
+    """
+    Возвращает указанное количество диалогов, фильтруя только личные и групповые чаты.
+    Каналы игнорируются, а лимит применяется к итоговому списку.
+    """
     dialogs_list = []
-    async for dialog in client.iter_dialogs(limit=15):
-        dialogs_list.append({"name": dialog.name, "id": dialog.id})
+    # Итерируем по диалогам без жесткого лимита в самом вызове,
+    # так как мы будем останавливаться вручную.
+    async for dialog in client.iter_dialogs():
+        # Проверяем, является ли диалог чатом с пользователем или группой
+        if dialog.is_user or dialog.is_group:
+            # Если да, добавляем его в наш список
+            dialogs_list.append({
+                "name": dialog.name,
+                "id": dialog.id
+            })
+
+        # Как только мы набрали нужное количество реальных чатов, выходим из цикла.
+        if len(dialogs_list) >= limit:
+            break
+            
     return dialogs_list
 
 async def _read_messages(dialog_id, limit):

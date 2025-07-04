@@ -48,12 +48,15 @@ def main():
     load_dotenv()
     
     # 1. Определяем, какие MCP активны
-    active_mcps_str = os.getenv("ACTIVE_MCPS", "")
-    if not active_mcps_str:
+    if len(sys.argv) > 1:
+        # Получаем строку вида "files,rpg,web" из первого аргумента
+        active_mcps_str = sys.argv[1]
+    else:
+        # Если аргумент не передан, значит, main.py запущен напрямую, а не из лаунчера
         app = QtWidgets.QApplication(sys.argv)
-        QtWidgets.QMessageBox.critical(None, "Ошибка запуска", "Переменная ACTIVE_MCPS не найдена.\nЗапустите приложение через launcher.py.")
+        QtWidgets.QMessageBox.critical(None, "Ошибка запуска", "Список активных MCP не был передан.\nПожалуйста, запустите приложение через launcher.py.")
         sys.exit(1)
-
+        
     active_mcp_keys = [key.strip() for key in active_mcps_str.split(',')]
     print(f"[MAIN] Активные MCP, согласно .env: {active_mcp_keys}")
 

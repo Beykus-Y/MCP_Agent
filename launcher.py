@@ -263,16 +263,21 @@ class LauncherWindow(QtWidgets.QWidget):
         if self.is_shutting_down: self.log("[INFO] Процессы остановлены, приложение закрывается."); self.close()
 
     def launch_main_app(self):
-        self.log("--- [ЗАПУСК] Обновление .env и запуск main.py ---")
+        self.log("--- [ЗАПУСК] Запуск main.py с передачей активных MCP ---")
+        
+        if not self.running_mcps:
+            self.log("[ОШИБКА] Нет запущенных MCP для передачи в main.py.")
+            QtWidgets.QMessageBox.warning(self, "Ошибка", "Сначала запустите хотя бы один MCP.")
+            return
+
         active_mcps_string = ",".join(sorted(self.running_mcps))
-        self.log(f"[*] Записываем в .env: ACTIVE_MCPS='{active_mcps_string}'")
-        dotenv_path = find_dotenv()
-        if not os.path.exists(dotenv_path):
-            with open(".env", "w") as f: f.write(""); dotenv_path = find_dotenv()
-        set_key(dotenv_path, "ACTIVE_MCPS", active_mcps_string)
-        self.log("[OK] Файл .env обновлен.")
+        self.log(f"[*] Передаем в main.py следующие MCP: {active_mcps_string}")
+        
+        # Формируем команду: python.exe main.py files,web,rpg
+        command = [sys.executable, "main.py", active_mcps_string]
+        
         try:
-            subprocess.Popen([sys.executable, "main.py"])
+            subprocess.Popen(command)
             self.log("[OK] Главный GUI запущен в отдельном процессе.")
         except Exception as e:
             self.log(f"[ОШИБКА] Не удалось запустить main.py: {e}")
