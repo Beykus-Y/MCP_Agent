@@ -1,4 +1,4 @@
-# UI.py (Версия 3.3 - Финальная исправленная)
+# UI.py (Версия 3.5 - Финальная исправленная)
 import os
 import logging
 import base64
@@ -134,9 +134,16 @@ class MainWindow(QtWidgets.QMainWindow):
         if current in models: self.model_combo.setCurrentText(current)
         save_btn = QtWidgets.QPushButton("Сохранить модель"); save_btn.clicked.connect(self.on_save_model)
         settings_btn = QtWidgets.QPushButton(qta.icon('fa5s.cog'), ""); settings_btn.setToolTip("Настройки"); settings_btn.setFlat(True); settings_btn.clicked.connect(self.open_settings_dialog)
-        new_chat_btn = QtWidgets.QPushButton(qta.icon('fa5s.plus-circle'), " Новый чат"); new_chat_btn.clicked.connect(self.on_new_chat)
-        delete_chat_btn = QtWidgets.QPushButton(qta.icon('fa5s.trash-alt'), " Удалить чат"); delete_chat_btn.clicked.connect(self.on_delete_chat)
-        self.chat_list_widget = QtWidgets.QListWidget(); self.chat_list_widget.currentItemChanged.connect(self.on_select_chat)
+        
+        # --- Кнопки управления чатами ---
+        new_chat_btn = QtWidgets.QPushButton(qta.icon('fa5s.plus-circle'), " Новый чат")
+        new_chat_btn.clicked.connect(self.on_new_chat) # <-- ВОССТАНОВЛЕНО
+        delete_chat_btn = QtWidgets.QPushButton(qta.icon('fa5s.trash-alt'), " Удалить чат")
+        delete_chat_btn.clicked.connect(self.on_delete_chat) # <-- ВОССТАНОВЛЕНО
+
+        self.chat_list_widget = QtWidgets.QListWidget()
+        self.chat_list_widget.currentItemChanged.connect(self.on_select_chat) # <-- ВОССТАНОВЛЕНО
+        
         left_panel_layout = QtWidgets.QVBoxLayout(); chat_buttons_layout = QtWidgets.QHBoxLayout(); chat_buttons_layout.addWidget(new_chat_btn); chat_buttons_layout.addWidget(delete_chat_btn)
         left_panel_layout.addLayout(chat_buttons_layout); left_panel_layout.addWidget(self.chat_list_widget); left_panel_widget = QtWidgets.QWidget(); left_panel_widget.setLayout(left_panel_layout)
         top_layout = QtWidgets.QHBoxLayout(); top_layout.addWidget(QtWidgets.QLabel("Модель:")); top_layout.addWidget(self.model_combo); top_layout.addWidget(save_btn); top_layout.addStretch(); top_layout.addWidget(settings_btn)
@@ -149,6 +156,7 @@ class MainWindow(QtWidgets.QMainWindow):
         attach_btn = QtWidgets.QPushButton(qta.icon('fa5s.paperclip'), ""); attach_btn.setFlat(True); attach_btn.setToolTip("Прикрепить изображение"); attach_btn.clicked.connect(self._on_attach_file)
         self.prompt_input = QtWidgets.QLineEdit(); self.prompt_input.setObjectName("PromptInput"); self.prompt_input.setPlaceholderText("Выберите чат или создайте новый...")
         self.send_btn = QtWidgets.QPushButton(qta.icon('fa5s.paper-plane'), " Отправить"); self.send_btn.clicked.connect(self.on_send); self.send_btn.setEnabled(False)
+        self.prompt_input.returnPressed.connect(self.on_send)
         chat_input_layout = QtWidgets.QHBoxLayout(); chat_input_layout.addWidget(attach_btn); chat_input_layout.addWidget(self.prompt_input); chat_input_layout.addWidget(self.send_btn)
         self.log_view = QtWidgets.QTextEdit(); self.log_view.setReadOnly(True); self.log_view.setObjectName("LogView")
         right_panel_layout = QtWidgets.QVBoxLayout(); right_panel_layout.addLayout(top_layout); right_panel_layout.addWidget(QtWidgets.QLabel("Чат с ИИ:"))
@@ -210,20 +218,118 @@ class MainWindow(QtWidgets.QMainWindow):
             logging.info("Настройки обновлены.")
 
     def on_select_chat(self, current_item, previous_item):
+        """
+        Загружает историю сообщений для выбранного чата и отображает их.
+        Исправлено для поддержки мультимодальных сообщений и GUI-команд.
+        """
         if not current_item: return
-        chat_id = current_item.data(QtCore.Qt.UserRole); self.current_chat_id = chat_id
-        messages, title = self.chat_manager.load_chat_history(chat_id); self.current_messages = messages; self.chat_history_list.clear()
-        for msg in self.current_messages:
-            content = msg.get('content'); role = msg.get('role'); text = ""; image_url = None
-            if isinstance(content, list):
-                for part in content:
-                    if part.get('type') == 'text': text = part.get('text', '')
-                    if part.get('type') == 'image_url': image_url = part.get('image_url', {}).get('url')
-                self._add_message_static(text, role, image_url=image_url)
-            else: self._add_message_static(str(content), role)
-        self.chat_history_list.scrollToBottom(); self.prompt_input.setPlaceholderText("Введите команду..."); self.send_btn.setEnabled(True); logging.info(f"Загружен чат «{title}» ({chat_id})")
+        chat_id = current_item.data(QtCore.Qt.UserRole)
+        self.current_chat_id = chat_id
+        messages, title = self.chat_manager.load_chat_history(chat_id)
+        self.current_messages = messages
+        self.chat_history_list.clear()
 
-    def on_new_chat(self): self.chat_list_widget.setCurrentItem(None); self.current_chat_id = None; self.current_messages = []; self.chat_history_list.clear(); self.prompt_input.setPlaceholderText("Введите первое сообщение..."); self.send_btn.setEnabled(True); self.prompt_input.setFocus(); logging.info("Начат новый чат.")
+        for msg in self.current_messages:
+            content = msg.get('content')
+            role = msg.get('role')
+            text_to_display = ""
+            image_url_to_display = None
+
+            if role == 'user':
+                # Сообщения пользователя могут быть мультимодальными (текст + изображение)
+                if isinstance(content, list):
+                    for part in content:
+                        if part.get('type') == 'text':
+                            text_to_display = part.get('text', '')
+                        if part.get('type') == 'image_url':
+                            image_url_to_display = part.get('image_url', {}).get('url')
+                elif isinstance(content, str): # Старый формат, только текст
+                    text_to_display = content
+                self._add_message_static(text_to_display, role, image_url=image_url_to_display)
+
+            elif role == 'assistant':
+                # Сообщения ассистента могут быть простым текстом или GUI-командой (JSON-строкой)
+                if isinstance(content, str):
+                    try:
+                        # Попытка разобрать как JSON для GUI-команд
+                        parsed_content = json.loads(content)
+                        if isinstance(parsed_content, dict) and "gui_tool" in parsed_content:
+                            tool_name = parsed_content["gui_tool"]
+                            params = parsed_content.get("params", {})
+                            if tool_name == "display_text":
+                                text_to_display = params.get("text", "")
+                            elif tool_name == "display_image":
+                                text_to_display = params.get("caption", "")
+                                image_url_to_display = params.get("url")
+                            else:
+                                text_to_display = f"Неизвестная GUI команда при загрузке: {tool_name}"
+                        else:
+                            # Не GUI-команда, обрабатываем как обычный текст
+                            text_to_display = content
+                    except json.JSONDecodeError:
+                        # Не JSON-строка, обрабатываем как обычный текст
+                        text_to_display = content
+                
+                # Если content был уже списком (из более старых мультимодальных ответов ассистента, хотя это менее распространено)
+                elif isinstance(content, list):
+                     for part in content:
+                        if part.get('type') == 'text':
+                            text_to_display = part.get('text', '')
+                        if part.get('type') == 'image_url':
+                            image_url_to_display = part.get('image_url', {}).get('url')
+                else: # Запасной вариант для всего остального (например, числа, булевы значения - хотя маловероятно для content)
+                    text_to_display = str(content)
+
+                self._add_message_static(text_to_display, role, image_url=image_url_to_display)
+            
+            else: # Для ролей 'error' или других
+                 if isinstance(content, list):
+                    for part in content:
+                        if part.get('type') == 'text':
+                            text_to_display = part.get('text', '')
+                        # Сообщения об ошибках обычно не содержат изображений, но сохраняем для надежности
+                        if part.get('type') == 'image_url':
+                            image_url_to_display = part.get('image_url', {}).get('url')
+                 else:
+                     text_to_display = str(content) # Преобразуем любой тип в строку
+
+                 self._add_message_static(text_to_display, role, image_url=image_url_to_display)
+
+
+        self.chat_history_list.scrollToBottom()
+        self.prompt_input.setPlaceholderText("Введите команду...")
+        self.send_btn.setEnabled(True)
+        logging.info(f"Загружен чат «{title}» ({chat_id})")
+
+    # --- ВОССТАНОВЛЕННЫЕ МЕТОДЫ УПРАВЛЕНИЯ ЧАТАМИ ---
+    def on_new_chat(self):
+        self.chat_list_widget.setCurrentItem(None)
+        self.current_chat_id = None
+        self.current_messages = []
+        self.chat_history_list.clear()
+        self.prompt_input.setPlaceholderText("Введите первое сообщение...")
+        self.send_btn.setEnabled(True)
+        self.prompt_input.setFocus()
+        logging.info("Начат новый чат.")
+
+    def on_delete_chat(self):
+        current_item = self.chat_list_widget.currentItem()
+        if not current_item:
+            QtWidgets.QMessageBox.warning(self, "Ошибка", "Выберите чат для удаления.")
+            return
+
+        reply = QtWidgets.QMessageBox.question(
+            self, "Подтверждение",
+            f"Вы уверены, что хотите удалить чат «{current_item.text()}»?",
+            QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No,
+            QtWidgets.QMessageBox.No
+        )
+        if reply == QtWidgets.QMessageBox.Yes:
+            chat_id = current_item.data(QtCore.Qt.UserRole)
+            self.chat_manager.delete_chat(chat_id)
+            logging.info(f"Чат {chat_id} удален.")
+            self.populate_chat_list()
+            self.on_new_chat() # После удаления переключаемся на новый чат
 
     def on_send(self):
         prompt = self.prompt_input.text().strip()
@@ -248,7 +354,12 @@ class MainWindow(QtWidgets.QMainWindow):
             gui_command = json.loads(reply)
             if isinstance(gui_command, dict) and "gui_tool" in gui_command:
                 tool_name = gui_command["gui_tool"]; params = gui_command.get("params", {})
-                if tool_name == "display_image": self.add_message_to_chat(params.get("caption", ""), "assistant", image_url=params.get("url")); self.current_messages.append({"role": "assistant", "content": reply})
+                if tool_name == "display_image": 
+                    self.add_message_to_chat(params.get("caption", ""), "assistant", image_url=params.get("url"))
+                    self.current_messages.append({"role": "assistant", "content": reply})
+                elif tool_name == "display_text": # НОВОЕ
+                    self.add_message_to_chat(params.get("text", ""), "assistant")
+                    self.current_messages.append({"role": "assistant", "content": reply})
                 else: self.add_message_to_chat(f"Неизвестная GUI команда: {tool_name}", "error")
                 self.chat_manager.save_chat(self.current_chat_id, self.current_messages); return
         except (json.JSONDecodeError, TypeError): pass
@@ -266,12 +377,6 @@ class MainWindow(QtWidgets.QMainWindow):
         self.chat_list_widget.clear(); chats = self.chat_manager.get_chats()
         for chat in chats: item = QtWidgets.QListWidgetItem(chat["title"]); item.setData(QtCore.Qt.UserRole, chat["id"]); self.chat_list_widget.addItem(item)
     
-    def on_delete_chat(self):
-        current_item = self.chat_list_widget.currentItem()
-        if not current_item: QtWidgets.QMessageBox.warning(self, "Ошибка", "Выберите чат для удаления."); return
-        reply = QtWidgets.QMessageBox.question(self, "Подтверждение", f"Вы уверены, что хотите удалить чат «{current_item.text()}»?", QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No, QtWidgets.QMessageBox.No)
-        if reply == QtWidgets.QMessageBox.Yes: chat_id = current_item.data(QtCore.Qt.UserRole); self.chat_manager.delete_chat(chat_id); logging.info(f"Чат {chat_id} удален."); self.populate_chat_list(); self.on_new_chat()
-
     def on_save_model(self):
         new_model = self.model_combo.currentText(); env_path = find_dotenv()
         if env_path: set_key(env_path, "SELECTED_MODEL", new_model); logging.info(f"Модель сохранена: {new_model}"); QtWidgets.QMessageBox.information(self, "Успех", f"Модель «{new_model}» сохранена в .env")

@@ -258,9 +258,17 @@ class AIWithMCPInterface(QtCore.QObject):
         
         logging.info(f"--- [RPG AGENT FINISHED] --- Результат: {result}")
         self.action_started.emit("RPG-агент завершил работу.")
+
+        gui_command = {
+       "gui_tool": "display_text", # Новый тип gui_tool для текстового ответа
+        "params": {
+        "text": result # Текст от RPG-агента
+            }
+        }
         
         # 4. Возвращаем текстовый результат как итог работы нашего инструмента
-        return result
+        logging.info(f"Агент сгенерировал команду для GUI: {gui_command}")
+        return json.dumps(gui_command)
 
     def show_image_in_chat(self, params: dict) -> str:
         """
