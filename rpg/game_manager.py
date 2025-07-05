@@ -6,7 +6,8 @@ from typing import Optional
 from .models import Character, Stats, Item, Quest # Добавлен Quest
 from .rules import RulesEngine
 from dataclasses import asdict, is_dataclass
-from .constants import DEFAULT_MAX_HP, DEFAULT_STARTING_HP
+
+from .constants import *
 from .world.world_state import WorldState, PointOfInterest, Faction, NPC # Добавлен NPC
 
 class EnhancedJSONEncoder(json.JSONEncoder):
@@ -18,14 +19,16 @@ class EnhancedJSONEncoder(json.JSONEncoder):
             return asdict(o)
         return super().default(o)
 
-BASE_SAVES_DIR = os.path.join(os.path.dirname(__file__), 'saves')
-CHAR_SAVES_DIR = os.path.join(BASE_SAVES_DIR, 'characters')
 
 
 class GameManager:
     def __init__(self):
         if not os.path.exists(CHAR_SAVES_DIR):
             os.makedirs(CHAR_SAVES_DIR)
+        if not os.path.exists(WORLD_TEMPLATES_DIR):
+            os.makedirs(WORLD_TEMPLATES_DIR)
+        if not os.path.exists(WORLD_STATES_DIR):
+            os.makedirs(WORLD_STATES_DIR)
             
         self.rules_engine = RulesEngine()
 
@@ -91,3 +94,53 @@ class GameManager:
 
         with open(path, 'w', encoding='utf-8') as f:
             json.dump(character, f, ensure_ascii=False, indent=4, cls=EnhancedJSONEncoder)
+
+    def load_world_state(self, world_name: str) -> Optional[WorldState]:
+        """
+        Пытается загрузить сохраненное состояние мира.
+        Возвращает WorldState или None, если файл не найден или поврежден.
+        """
+        state_filename = f"{world_name.replace(' ', '_')}.state.json"
+        state_filepath = os.path.join(WORLD_STATES_DIR, state_filename)
+
+        if os.path.exists(state_filepath):
+            try:
+                with open(state_filepath, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                return WorldState.from_dict(data)
+            except Exception as e:
+                print(f"Ошибка загрузки состояния мира '{world_name}': {e}")
+                return None
+        return None
+
+    def load_world_template(self, world_name: str) -> Optional[WorldState]:
+        """
+        Загружает базовый шаблон мира.
+        Возвращает WorldState или None.
+        """
+        template_filename = f"{world_name.replace(' ', '_')}.world"
+        template_filepath = os.path.join(WORLD_TEMPLATES_DIR, template_filename)
+
+        if os.path.exists(template_filepath):
+            try:
+                with open(template_filepath, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                return WorldState.from_dict(data)
+            except Exception as e:
+                print(f"Ошибка загрузки шаблона мира '{world_name}': {e}")
+                return None
+        return None
+
+    def save_world_state(self, world: WorldState):
+        """Сохраняет текущее состояние мира в файл."""
+        if not world: return
+        
+        filename = f"{world.world_name.replace(' ', '_')}.state.json"
+        filepath = os.path.join(WORLD_STATES_DIR, filename)
+
+        try:
+            world_data = asdict(world)
+            with open(filepath, 'w', encoding='utf-8') as f:
+                json.dump(world_data, f, ensure_ascii=False, indent=4, cls=EnhancedJSONEncoder)
+        except Exception as e:
+            print(f"Критическая ошибка при сохранении состояния мира: {e}")

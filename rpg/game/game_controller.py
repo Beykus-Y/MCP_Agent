@@ -88,7 +88,7 @@ class GameController(QtCore.QObject):
     def move_character(self, dx, dy):
         if self.is_online:
             self.network_worker.send_action({'type': MessageType.PLAYER_MOVE, 'data': {'dx': dx, 'dy': dy}})
-            self.log_message_sent.emit(f"Отправлен запрос на перемещение на ({dx}, {dy}). Ожидание ответа сервера...")
+            # self.log_message_sent.emit(f"Отправлен запрос на перемещение на ({dx}, {dy}). Ожидание ответа сервера...")
             return
 
         # Логика для оффлайн режима

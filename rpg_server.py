@@ -9,7 +9,7 @@ import uuid
 import logging # <--- Добавлен модуль логирования
 from typing import List, Dict, Any, Optional, Tuple 
 from dataclasses import dataclass, asdict
-
+import signal
 # Настраиваем базовый уровень логирования
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
@@ -23,7 +23,7 @@ from rpg.game_manager import GameManager, EnhancedJSONEncoder
 from rpg.world.world_state import WorldState, PointOfInterest, Faction
 from rpg.world.generator import WorldGenerator
 from rpg.network_protocol import send_json_message, receive_json_message, MessageType
-from rpg.constants import BIOME_COLORS, BUFFER_SIZE, PORT, HOST, FOG_REVEAL_SIZE
+from rpg.constants import BIOME_COLORS, BUFFER_SIZE, PORT, HOST, FOG_REVEAL_SIZE, WORLD_STATES_DIR, WORLD_TEMPLATES_DIR
 from rpg.world.nomenclator import Nomenclator
 @dataclass
 class PlayerInfo:
@@ -31,7 +31,7 @@ class PlayerInfo:
     save_id: str
 
 class GameServer:
-    def __init__(self):
+    def __init__(self, world_name: str):
         dotenv_path = find_dotenv()
         if os.path.exists(dotenv_path):
             load_dotenv(dotenv_path)
@@ -42,37 +42,49 @@ class GameServer:
         self.connected_clients: dict[str, socket.socket] = {} # {player_id: socket}
         self.player_data: dict[str, PlayerInfo] = {} # {player_id: PlayerInfo object}
         self.nomenclator = Nomenclator()
-        self.world: WorldState = self._load_or_generate_world()
         self.server_socket: Optional[socket.socket] = None
         self.running = False
-        
+        self.world_name = world_name
         self.lock = threading.RLock() # Блокировка для доступа к общим данным (мир, персонажи)
-
+        if not os.path.exists(WORLD_STATES_DIR):
+            os.makedirs(WORLD_STATES_DIR)
+        
+        self.game_manager = GameManager()
+        self.nomenclator = Nomenclator()
         logging.info(f"--- RPG Server Initialized ---")
+        self.world: WorldState = self._load_or_initialize_world() # <--- Вызываем новый метод
+        self.server_socket: Optional[socket.socket] = None
+        self.running = False
+        self.lock = threading.RLock()
+
+        logging.info(f"--- RPG Server Initialized for world '{self.world_name}' ---")
         logging.info(f"World: {self.world.world_name} (Size: {self.world.map_size[0]}x{self.world.map_size[1]})")
         logging.info(f"Listening on {HOST}:{PORT}")
 
-    def _load_or_generate_world(self) -> WorldState:
-        world_name = "Тестовый мир"
-        world_filepath = os.path.join(os.path.dirname(__file__), 'rpg', 'saves', 'worlds', f"{world_name.replace(' ', '_')}.world")
+
+    def _load_or_initialize_world(self) -> WorldState:
+        # 1. Пытаемся загрузить сохраненное СОСТОЯНИЕ через GameManager
+        logging.info(f"Attempting to load state for world '{self.world_name}'...")
+        world = self.game_manager.load_world_state(self.world_name)
+        if world:
+            logging.info("Saved world state loaded successfully.")
+            return world
+
+        # 2. Если не получилось, пытаемся загрузить ШАБЛОН через GameManager
+        logging.info(f"No saved state found. Initializing from template '{self.world_name}'...")
+        world = self.game_manager.load_world_template(self.world_name)
+        if world:
+            logging.info("World template loaded successfully.")
+            return world
+
+        # --- Шаг 3: Если нет ни состояния, ни шаблона, ГЕНЕРАЦИЯ нового мира ---
+        logging.warning(f"No state or template found for '{self.world_name}'. Generating a new world as a fallback.")
         
-        if os.path.exists(world_filepath):
-            logging.info(f"Attempting to load world from {world_filepath}...")
-            try:
-                with open(world_filepath, 'r', encoding='utf-8') as f:
-                    data = json.load(f)
-                
-                world = WorldState.from_dict(data) # <--- Использование from_dict
-                logging.info(f"World '{world.world_name}' loaded successfully.")
-                return world
-            except Exception as e:
-                logging.error(f"Error loading world from {world_filepath}: {e}. Generating a new one.")
-                pass
+        generator = WorldGenerator(map_width=50, map_height=50)
         
-        logging.info("Generating a new world...")
-        generator = WorldGenerator(map_width=50, map_height=50) # Меньший мир для быстрого тестирования
+        # Используем self.world_name для генерации, а не жестко заданное имя
         params = {
-            "world_name": world_name,
+            "world_name": self.world_name,
             "year": 1000,
             "tech_level": "fantasy",
             "magic_level": "medium",
@@ -82,10 +94,15 @@ class GameServer:
                 {"id": "nomad_horde", "name": "Кочевая орда", "description": "", "tech_level": ["stone_age", "fantasy"], "magic_level": ["none", "low"]}
             ]
         }
+        
         world = generator.generate_new_world(params)
-        generator.save_world(world) # Сохраняем сгенерированный мир
-        logging.info(f"New world '{world.world_name}' generated and saved.")
+        # Сохраняем сгенерированный мир как новый ШАБЛОН
+        generator.save_world(world)
+        logging.info(f"New world template '{self.world_name}' generated and saved.")
+        
         return world
+    
+
     def _handle_player_entered_poi(self, character: Character, data: dict):
         poi_id = data.get('poi_id')
         if not poi_id: return
@@ -117,6 +134,12 @@ class GameServer:
 
         # Рассылаем всем обновленное состояние мира (с новым visited_pois и, возможно, новым описанием)
         self.broadcast_game_state_update()
+    def save_world_state(self):
+        """Сохраняет текущее состояние мира в файл."""
+        logging.info(f"Saving current world state for '{self.world.world_name}'...")
+        # Просто вызываем метод менеджера
+        self.game_manager.save_world_state(self.world)
+        logging.info("World state saved successfully via GameManager.")
 
     def start(self):
         self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -125,7 +148,8 @@ class GameServer:
         self.server_socket.bind((HOST, PORT))
         self.server_socket.listen(5)
         self.running = True
-        logging.info(f"Server started, listening on {HOST}:{PORT}")
+        signal.signal(signal.SIGINT, self.signal_handler)
+        logging.info(f"Server started, listening on {HOST}:{PORT} Press Ctrl+C to stop.")
 
         accept_thread = threading.Thread(target=self._accept_connections)
         accept_thread.daemon = True # Позволяет потоку завершиться при закрытии основной программы
@@ -134,10 +158,15 @@ class GameServer:
         # Основной цикл сервера (можно добавить логику обновления мира)
         try:
             while self.running:
-                time.sleep(0.1) # Немного ждем, чтобы не нагружать CPU
+                time.sleep(1) # Просто ждем, чтобы главный поток не завершился
         except KeyboardInterrupt:
-            logging.info("Server shutting down due to KeyboardInterrupt...")
+            logging.info("KeyboardInterrupt received in main thread.")
         finally:
+            self.stop()
+    def signal_handler(self, sig, frame):
+        """Обработчик для Ctrl+C."""
+        logging.warning(f"Signal {sig} received. Initiating graceful shutdown...")
+        if self.running:
             self.stop()
 
     def _accept_connections(self):
@@ -445,15 +474,18 @@ class GameServer:
         logging.info(f"Cleanup of client {player_id} finished, state broadcasted.")
 
     def stop(self):
+        if not self.running: # Предотвращаем двойной вызов
+            return
+            
         logging.info("Stopping server...")
         self.running = False
-        if self.server_socket:
-            try:
-                self.server_socket.close()
-                logging.info("Server listening socket closed.")
-            except OSError as e:
-                logging.error(f"OSError during server_socket shutdown/close: {e}", exc_info=True)
         
+        # 1. Закрываем главный сокет, чтобы не принимать новые подключения
+        if self.server_socket:
+            self.server_socket.close()
+            logging.info("Server listening socket closed.")
+        
+        # 2. Сохраняем прогресс всех игроков и закрываем их сокеты
         with self.lock:
             # Итерируем по копии, так как элементы будут удаляться
             for player_id, p_info in list(self.player_data.items()): 
@@ -482,6 +514,7 @@ class GameServer:
                         del self.player_data[player_id]
             self.player_data.clear()
             self.connected_clients.clear()
+            self.save_world_state()
         logging.info("Server stopped successfully.")
 
     def _handle_equip_item(self, character: Character, data: dict):
@@ -556,9 +589,20 @@ class GameServer:
             logging.warning(f"Failed to apply effects for item {item_to_use.name} for player {character.name}.")
 
 if __name__ == "__main__":
+
+    WORLD_TO_RUN = "Тестовый мир" 
+
     dotenv_path = find_dotenv()
     if os.path.exists(dotenv_path):
         load_dotenv(dotenv_path)
 
-    server = GameServer()
-    server.start()
+    server = GameServer(world_name=WORLD_TO_RUN)
+    try:
+        server.start()
+    except FileNotFoundError as e:
+        logging.error(str(e))
+        logging.error("Please create the world using the main menu first.")
+    except Exception as e:
+        logging.critical(f"An unhandled exception caused the server to crash: {e}", exc_info=True)
+    finally:
+        logging.info("Server process finished.")

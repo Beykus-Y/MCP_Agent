@@ -209,7 +209,13 @@ class GameWindow(QtWidgets.QWidget):
             else:
                 event.ignore()
         elif not self.controller.is_online:
-            self.controller.game_manager.save_character_progress(self.controller.character, self.controller.save_id)
-            event.accept()
+            reply = QtWidgets.QMessageBox.question(self, 'Подтверждение выхода', "Вы уверены? Весь прогресс будет сохранен.", QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No, QtWidgets.QMessageBox.No)
+            if reply == QtWidgets.QMessageBox.Yes:
+                # Сохраняем и персонажа, и мир через контроллер
+                self.controller.game_manager.save_character_progress(self.controller.character, self.controller.save_id)
+                self.controller.game_manager.save_world_state(self.controller.world)
+                event.accept()
+            else:
+                event.ignore()
         else:
             event.accept()

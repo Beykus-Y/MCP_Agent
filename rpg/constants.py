@@ -30,3 +30,9 @@ FOG_COLOR = QtGui.QColor("#1a1a1a") # Темно-серый или черный 
 HOST = '127.0.0.1' # Loopback адрес, если играем на одной машине
 PORT = 65432       # Порт для связи
 BUFFER_SIZE = 4096 # Размер буфера для приема данных
+import os
+BASE_SAVES_DIR = os.path.join(os.path.dirname(__file__), 'saves')
+WORLD_TEMPLATES_DIR = os.path.join(BASE_SAVES_DIR, 'worlds')
+WORLD_STATES_DIR = os.path.join(BASE_SAVES_DIR, 'world_states')
+
+CHAR_SAVES_DIR = os.path.join(BASE_SAVES_DIR, 'characters')

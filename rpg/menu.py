@@ -247,13 +247,22 @@ class MainMenuWindow(QtWidgets.QWidget):
             QtWidgets.QMessageBox.critical(self, "Ошибка загрузки", f"Не удалось загрузить данные персонажа из {char_save_id}.")
             return
             
-        world_filepath = self._select_world_dialog()
+        world_filepath = self._select_world_dialog() # Диалог все еще возвращает путь к ШАБЛОНУ
         if not world_filepath:
             return 
 
-        world = self._load_world_from_file(world_filepath)
+        # Извлекаем имя мира из пути
+        world_name = os.path.splitext(os.path.basename(world_filepath))[0]
+
+        # Пытаемся загрузить СОСТОЯНИЕ этого мира
+        world = self.game_manager.load_world_state(world_name)
+        
+        # Если состояния нет, загружаем ШАБЛОН
         if not world:
-            QtWidgets.QMessageBox.critical(self, "Ошибка загрузки", f"Не удалось загрузить или прочитать файл мира:\n{world_filepath}")
+            world = self.game_manager.load_world_template(world_name)
+
+        if not world:
+            QtWidgets.QMessageBox.critical(self, "Ошибка загрузки", f"Не удалось загрузить мир '{world_name}'. Файл поврежден или не найден.")
             return
             
         self.game_window = GameWindow(
