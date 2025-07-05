@@ -1,0 +1,56 @@
+[
+    {
+      "id": "greater_healing_potion",
+      "name": "Большое зелье лечения",
+      "slot": "consumable",
+      "description": "Большая красная колба, наполненная бурлящей эссенцией. Восстанавливает значительное количество здоровья.",
+      "effects": [
+        { "type": "heal", "value": "4d4+4", "on_use": true }
+      ]
+    },
+    {
+      "id": "potion_of_invisibility",
+      "name": "Зелье Невидимости",
+      "slot": "consumable",
+      "description": "Жидкость, переливающаяся всеми цветами радуги, словно мираж. При употреблении делает носителя полностью невидимым на короткое время.",
+      "effects": [
+        { "type": "flag_modifier", "flag": "Invisible_For_Turns", "action": "add", "duration_turns": 3, "on_use": true }
+      ]
+    },
+    {
+      "id": "elixir_of_giant_strength",
+      "name": "Эликсир Гигантской Силы",
+      "slot": "consumable",
+      "description": "Густой, мерцающий золотом напиток. Придает временную силу, равную силе холмового гиганта.",
+      "effects": [
+        { "type": "stat_modifier", "stat": "strength", "value": 5, "duration_turns": 5, "on_use": true }
+      ]
+    },
+    {
+      "id": "anti_poison_vial",
+      "name": "Флакон Антидота",
+      "slot": "consumable",
+      "description": "Небольшая стеклянная пробирка с молочной жидкостью. Мгновенно нейтрализует большинство обычных ядов.",
+      "effects": [
+        { "type": "flag_modifier", "flag": "Cure_Poison", "action": "add", "on_use": true }
+      ]
+    },
+    {
+      "id": "philter_of_insight",
+      "name": "Примочка Проницательности",
+      "slot": "consumable",
+      "description": "Зеленоватая, прозрачная жидкость, которая улучшает ваши чувства и мышление. Временно увеличивает внимательность.",
+      "effects": [
+        { "type": "check_bonus", "check": "perception", "value": 10, "duration_turns": 10, "on_use": true }
+      ]
+    },
+    {
+      "id": "brew_of_chilling",
+      "name": "Отвар Охлаждения",
+      "slot": "consumable",
+      "description": "Темная жидкость, испускающая слабый холод. Используется для замедления преследователей или для тушения мелких пожаров. Может иметь легкое оглушающее действие.",
+      "effects": [
+        { "type": "flag_modifier", "flag": "AOE_Slow_Debuff", "action": "add", "on_use": true }
+      ]
+    }
+  ]

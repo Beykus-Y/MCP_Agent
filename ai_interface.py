@@ -101,25 +101,10 @@ class AIWithMCPInterface(QtCore.QObject):
         # ### НОВОЕ: Локальные инструменты, определенные в коде, а не через MCP ###
         # Оркестратор будет использовать это для вызова суб-агентов.
         self.local_tools = {
-            "execute_rpg_task": self.execute_rpg_task,
             "show_image_in_chat": self.show_image_in_chat
             # ... другие инструменты :
         }
         self.local_tools_schema = [
-            {
-                "name": "execute_rpg_task",
-                "description": "Делегирует сложную задачу, связанную с ролевой игрой (RPG), специализированному RPG-агенту. Используй для ВСЕХ RPG-запросов.",
-                "parameters": {
-                    "type": "object", 
-                    "properties": {
-                        "task_description": {
-                            "type": "string", 
-                            "description": "Четкое и полное описание задачи для RPG-агента. Например: 'Узнай, где находится игрок и что он видит'."
-                        }
-                    }, 
-                    "required": ["task_description"]
-                }
-            },
             {
                 "name": "show_image_in_chat",
                 "description": "Показывает пользователю изображение прямо в окне чата. Используй эту функцию, когда пользователь просит что-то показать, или когда визуальное представление информации будет полезно. Всегда предоставляй прямой URL изображения.",
@@ -226,49 +211,7 @@ class AIWithMCPInterface(QtCore.QObject):
                     logging.error(f"Ошибка при регистрации MCP '{name}' для агента: {e}")
 
     
-
-    # ### НОВОЕ: Реализация локального инструмента ###
-    def execute_rpg_task(self, params: dict) -> str:
-        """
-        Метод-инструмент. Создает и запускает узкоспециализированного RPG-агента.
-        Вызывается Оркестратором.
-        """
-        task_description = params.get("task_description")
-        if not task_description:
-            return "Ошибка: задача для RPG-агента не была предоставлена."
-
-        logging.info(f"--- [DELEGATING TO RPG AGENT] --- Задача: {task_description}")
-        self.action_started.emit("Запускаю RPG-агента для выполнения задачи...")
-
-        # 1. Создаем экземпляр RPG-агента
-        rpg_agent = AIWithMCPInterface(
-            client=self.client,
-            prompt_path="prompts/rpg_agent_prompt.txt",
-            all_mcp_servers=self.ALL_MCP_SERVERS,
-            allowed_mcp_filter=["rpg"] # <-- Ключевой момент: разрешаем ему только RPG-инструменты
-        )
-        
-        # 2. Убираем у суб-агента возможность вызывать других суб-агентов, чтобы избежать рекурсии
-        rpg_agent.local_tools = {}
-        rpg_agent.local_tools_schema = []
-        
-        # 3. Запускаем его с одной единственной задачей от Оркестратора
-        initial_history = [{"role": "user", "content": task_description}]
-        result = rpg_agent.call_ai(initial_history)
-        
-        logging.info(f"--- [RPG AGENT FINISHED] --- Результат: {result}")
-        self.action_started.emit("RPG-агент завершил работу.")
-
-        gui_command = {
-       "gui_tool": "display_text", # Новый тип gui_tool для текстового ответа
-        "params": {
-        "text": result # Текст от RPG-агента
-            }
-        }
-        
-        # 4. Возвращаем текстовый результат как итог работы нашего инструмента
-        logging.info(f"Агент сгенерировал команду для GUI: {gui_command}")
-        return json.dumps(gui_command)
+   
 
     def show_image_in_chat(self, params: dict) -> str:
         """

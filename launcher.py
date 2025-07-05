@@ -139,12 +139,15 @@ class LauncherWindow(QtWidgets.QWidget):
         self.launch_main_button.setEnabled(False)
         self.launch_main_button.setToolTip("Запускает main.py, используя настройки из .env")
 
-        self.launch_visualizer_button = QtWidgets.QPushButton(qta.icon('fa5s.map-marked-alt'), " Запустить Визуализатор RPG")
-        self.launch_visualizer_button.clicked.connect(self.launch_visualizer)
-        self.launch_visualizer_button.setToolTip("Запускает rpg_visualizer.py.\nТребует запущенного 'RPG Engine' MCP.")
+        launch_layout.addWidget(self.launch_main_button, 0, 0)
+        launch_box.setLayout(launch_layout)
+        #RPG
+        self.launch_rpg_button = QtWidgets.QPushButton(qta.icon('fa5s.dice-d20'), " Запустить Ролевую Игру")
+        self.launch_rpg_button.clicked.connect(self.launch_rpg_game)
+        self.launch_rpg_button.setToolTip("Открывает отдельный модуль для кодовой RPG.")
 
         launch_layout.addWidget(self.launch_main_button, 0, 0)
-        launch_layout.addWidget(self.launch_visualizer_button, 0, 1)
+        launch_layout.addWidget(self.launch_rpg_button, 0, 1) # Добавляем рядом
         launch_box.setLayout(launch_layout)
 
         # Компоновка
@@ -153,6 +156,25 @@ class LauncherWindow(QtWidgets.QWidget):
         main_layout.addWidget(control_box)
         main_layout.addWidget(log_box, stretch=1)
         main_layout.addWidget(launch_box)
+
+
+    def launch_rpg_game(self):
+        """Запускает главное меню RPG в новом окне."""
+        self.log("--- [ЗАПУСК] Открытие модуля ролевой игры ---")
+        try:
+            # Импортируем окно меню прямо здесь, чтобы не смешивать зависимости
+            from rpg.menu import MainMenuWindow
+            
+            # Мы должны сохранить ссылку на окно, иначе сборщик мусора его уничтожит
+            # `self.rpg_window` - это нормально, если вы не планируете открывать много окон
+            self.rpg_window = MainMenuWindow() 
+            self.rpg_window.show()
+            self.log("[OK] Окно RPG успешно открыто.")
+        except ImportError as e:
+            self.log(f"[ОШИБКА] Не удалось импортировать модуль RPG: {e}")
+            QtWidgets.QMessageBox.critical(self, "Ошибка", f"Не найдены файлы игры в папке 'rpg'.\nОшибка: {e}")
+        except Exception as e:
+            self.log(f"[ОШИБКА] Не удалось запустить RPG модуль: {e}")
 
     # --- НОВЫЕ ВСПОМОГАТЕЛЬНЫЕ МЕТОДЫ ДЛЯ UI ---
     def _add_password_field(self, layout, label_text, line_edit):
@@ -282,17 +304,6 @@ class LauncherWindow(QtWidgets.QWidget):
         except Exception as e:
             self.log(f"[ОШИБКА] Не удалось запустить main.py: {e}")
     
-    def launch_visualizer(self):
-        self.log("--- [ЗАПУСК] Запускаем Визуализатор RPG ---")
-        if "rpg" not in self.running_mcps:
-            QtWidgets.QMessageBox.warning(self, "Ошибка", "Для запуска визуализатора необходимо сначала запустить 'RPG Engine' MCP.")
-            self.log("[ОШИБКА] Попытка запуска визуализатора без запущенного MCP_RPG.")
-            return
-        try:
-            subprocess.Popen([sys.executable, "rpg_visualizer.py"])
-            self.log("[OK] Визуализатор запущен в отдельном процессе.")
-        except Exception as e:
-            self.log(f"[ОШИБКА] Не удалось запустить rpg_visualizer.py: {e}")
 
     def closeEvent(self, event):
         if self.is_shutting_down: event.accept(); return

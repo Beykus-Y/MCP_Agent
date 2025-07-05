@@ -99,14 +99,13 @@ def main():
     
     # Создаем список MCP, которые Оркестратор может использовать НАПРЯМУЮ.
     # Он не должен видеть 'rpg', чтобы быть вынужденным его делегировать.
-    orchestrator_allowed_mcps = [key for key in active_mcp_keys if key != 'rpg']
-    print(f"[MAIN] Оркестратору разрешены следующие MCP: {orchestrator_allowed_mcps}")
+    print(f"[MAIN] Оркестратору разрешены следующие MCP: {active_mcp_keys }")
 
     ai_iface = AIWithMCPInterface(
         client=client,
         prompt_path="prompts/orchestrator_prompt.txt",
         all_mcp_servers=servers_to_check,
-        allowed_mcp_filter=orchestrator_allowed_mcps # <-- ПРИМЕНЯЕМ ФИЛЬТР
+        allowed_mcp_filter=active_mcp_keys  # <-- ПРИМЕНЯЕМ ФИЛЬТР
     )
     print("[MAIN] Оркестратор готов.")
     

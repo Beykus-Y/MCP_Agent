@@ -1,0 +1,9 @@
+[
+  { "id": "blacksmith", "name": "Кузнец" },
+  { "id": "innkeeper", "name": "Трактирщик" },
+  { "id": "merchant", "name": "Торговец" },
+  { "id": "guard_captain", "name": "Капитан стражи" },
+  { "id": "herbalist", "name": "Травник" },
+  { "id": "archivist", "name": "Архивариус" },
+  { "id": "elder", "name": "Староста" }
+]

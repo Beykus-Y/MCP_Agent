@@ -26,3 +26,5 @@ semantic_memory.db
 Thumbs.db # Windows
 rpg_database.db
 rpg_active_save.json
+*saves
+*.world

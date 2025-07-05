@@ -1,0 +1,133 @@
+[
+  {
+    "id": "night_vision",
+    "name": "Ночное зрение",
+    "description": "Ваши глаза приспособлены к слабому свету, позволяя вам видеть в темноте и сумерках без штрафов. Это дает вам преимущество в скрытности в условиях низкой освещенности.",
+    "cost": -4,
+    "effects": [
+      { "type": "flag_modifier", "flag": "darkvision", "action": "add" },
+      { "type": "check_bonus", "check": "stealth", "value": 3 }
+    ]
+  },
+  {
+    "id": "iron_will",
+    "name": "Железная Воля",
+    "description": "Вы обладаете необычайной решимостью, что делает вас устойчивым к страху и ментальным манипуляциям. Сложно сломить ваш дух.",
+    "cost": -5,
+    "effects": [
+      { "type": "check_bonus", "check": "fear", "value": 5 },
+      { "type": "check_bonus", "check": "willpower", "value": 5 }
+    ]
+  },
+  {
+    "id": "nimble_footed",
+    "name": "Легконогий",
+    "description": "Вы легки на ноги и удивительно гибки, что улучшает ваши навыки уклонения и поддержания равновесия в бою. Идеально для избегания урона.",
+    "cost": -4,
+    "effects": [
+      { "type": "armor_class", "value": 1 },
+      { "type": "check_bonus", "check": "athletics", "value": 3 }
+    ]
+  },
+  {
+    "id": "silver_tongue",
+    "name": "Серебряный Язык",
+    "description": "Ваше присутствие располагает к себе, а ваши слова звучат убедительно. Вам легче налаживать контакты с людьми, выбивать скидки и добиваться своего дипломатией.",
+    "cost": -4,
+    "effects": [
+      { "type": "stat_modifier", "stat": "charisma", "value": 1 },
+      { "type": "check_bonus", "check": "persuasion", "value": 5 }
+    ]
+  },
+  {
+    "id": "tough_as_nails",
+    "name": "Крепкий как гвоздь",
+    "description": "Ваш организм исключительно вынослив и здоров, позволяя вам поглощать больше урона и дольше оставаться в бою, даже когда другие падают.",
+    "cost": -6,
+    "effects": [
+      { "type": "armor_class", "value": 2 },
+      { "type": "flag_modifier", "flag": "bonus_max_hp_per_level", "action": "add" }
+    ]
+  },
+  {
+    "id": "quick_thinker",
+    "name": "Быстро Мыслящий",
+    "description": "Ваш разум работает с молниеносной скоростью. Вы быстро схватываете новые концепции, находите решения проблем и реже попадаете впросак.",
+    "cost": -3,
+    "effects": [
+      { "type": "stat_modifier", "stat": "intelligence", "value": 1 },
+      { "type": "check_bonus", "check": "insight", "value": 3 }
+    ]
+  },
+  {
+    "id": "keen_senses",
+    "name": "Острые Чувства",
+    "description": "Ваши зрение, слух и обоняние намного превосходят среднечеловеческие. Вы замечаете скрытые детали и потенциальные угрозы раньше других.",
+    "cost": -3,
+    "effects": [
+      { "type": "check_bonus", "check": "perception", "value": 5 },
+      { "type": "flag_modifier", "flag": "difficult_to_surprise", "action": "add" }
+    ]
+  },
+  {
+    "id": "slow_healer",
+    "name": "Медленное Исцеление",
+    "description": "Ваш организм восстанавливается с трудом. Заживление ран занимает больше времени, а зелья лечения не столь эффективны для вас.",
+    "cost": 3,
+    "effects": [
+      { "type": "flag_modifier", "flag": "reduced_healing_effect", "action": "add" },
+      { "type": "flag_modifier", "flag": "slower_hp_regeneration", "action": "add" }
+    ]
+  },
+  {
+    "id": "clumsy",
+    "name": "Неуклюжий",
+    "description": "Вы часто спотыкаетесь, роняете вещи и плохо координируете движения, что негативно сказывается на ваших скрытных перемещениях и боевых навыках.",
+    "cost": 4,
+    "effects": [
+      { "type": "stat_modifier", "stat": "dexterity", "value": -1 },
+      { "type": "armor_class", "value": -1 },
+      { "type": "check_bonus", "check": "stealth", "value": -5 }
+    ]
+  },
+  {
+    "id": "agoraphobia",
+    "name": "Агорафобия (Страх Открытых Пространств)",
+    "description": "Большие открытые пространства вызывают у вас панику и беспокойство, что снижает вашу эффективность и концентрацию.",
+    "cost": 2,
+    "effects": [
+      { "type": "check_bonus", "check": "fear", "value": 3, "condition": "open_areas" },
+      { "type": "check_bonus", "check": "concentration", "value": -3, "condition": "open_areas" }
+    ]
+  },
+  {
+    "id": "naivety",
+    "name": "Наивность",
+    "description": "Вам трудно различать правду и ложь, и вы склонны доверять незнакомцам. Это делает вас уязвимым для обмана.",
+    "cost": 2,
+    "effects": [
+      { "type": "check_bonus", "check": "insight", "value": -7 },
+      { "type": "check_bonus", "check": "deception_resist", "value": -5 }
+    ]
+  },
+  {
+    "id": "weak_bladder",
+    "name": "Слабый Мочевой Пузырь",
+    "description": "Ваши потребности довольно… частые. Вы вынуждены искать туалет чаще обычного, что может приводить к неудобствам или задержкам.",
+    "cost": 1,
+    "effects": [
+      { "type": "flag_modifier", "flag": "needs_frequent_restroom", "action": "add" },
+      { "type": "check_bonus", "check": "endurance", "value": -1 }
+    ]
+  },
+  {
+    "id": "easily_frightened",
+    "name": "Пугливый",
+    "description": "Вы чрезвычайно пугливы и легко паникуете при виде угрозы или внезапного шума. Справляться со страхом для вас - настоящее испытание.",
+    "cost": 3,
+    "effects": [
+      { "type": "check_bonus", "check": "fear", "value": -5 },
+      { "type": "stat_modifier", "stat": "strength", "value": -1 }
+    ]
+  }
+]

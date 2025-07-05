@@ -1,0 +1,111 @@
+[
+    {
+      "id": "padded_leather_vest",
+      "name": "Мягкий Кожаный Жилет",
+      "slot": "chest",
+      "description": "Простой жилет из мягкой кожи, обеспечивающий базовую защиту и не стесняющий движений.",
+      "effects": [
+        { "type": "armor_class", "value": 1 }
+      ]
+    },
+    {
+      "id": "steel_plate_chestpiece",
+      "name": "Стальная Латная Кираса",
+      "slot": "chest",
+      "description": "Массивный кусок кованой стали, закрывающий торс. Обеспечивает превосходную защиту, но довольно тяжел.",
+      "effects": [
+        { "type": "armor_class", "value": 8 },
+        { "type": "check_bonus", "check": "stealth", "value": -5 }
+      ]
+    },
+    {
+      "id": "dragonscale_vambraces",
+      "name": "Драконьи Наручи",
+      "slot": "hands",
+      "description": "Изготовлены из чешуи молодого дракона, эти наручи предлагают отличную защиту рук и легкую устойчивость к огню.",
+      "effects": [
+        { "type": "armor_class", "value": 3 },
+        { "type": "flag_modifier", "flag": "Fire_Resistance", "action": "add" }
+      ]
+    },
+    {
+      "id": "wizard_hat",
+      "name": "Шляпа Волшебника",
+      "slot": "head",
+      "description": "Классическая заостренная шляпа, придающая авторитета своему носителю и слегка усиливающая его ум.",
+      "effects": [
+        { "type": "armor_class", "value": 1 },
+        { "type": "stat_modifier", "stat": "intelligence", "value": 1 }
+      ]
+    },
+    {
+      "id": "elvish_boots_of_striding",
+      "name": "Эльфийские Сапоги Скорохода",
+      "slot": "feet",
+      "description": "Невероятно легкие и бесшумные сапоги, сплетенные из особой травы и эльфийской кожи.",
+      "effects": [
+        { "type": "armor_class", "value": 2 },
+        { "type": "check_bonus", "check": "stealth", "value": 5 }
+      ]
+    },
+    {
+      "id": "goblins_iron_shield",
+      "name": "Гоблинский Железный Щит",
+      "slot": "shield",
+      "description": "Грубо сколоченный железный щит, изъеденный ржавчиной. Несмотря на уродливый вид, он довольно крепок.",
+      "effects": [
+        { "type": "armor_class", "value": 4 }
+      ]
+    },
+    {
+      "id": "bear_pelt_cloak",
+      "name": "Плащ из Медвежьей Шкуры",
+      "slot": "cloak",
+      "description": "Теплый плащ из шкуры медведя. Дает не только защиту от холода, но и внушает первобытный страх врагам.",
+      "effects": [
+        { "type": "armor_class", "value": 2 },
+        { "type": "check_bonus", "check": "fear", "value": 7 }
+      ]
+    },
+    {
+      "id": "dark_cultist_robes",
+      "name": "Роба Темного Культиста",
+      "slot": "chest",
+      "description": "Темная, мешковатая роба, источающая запах затхлости и крови. Защищает от воздействия злой магии.",
+      "effects": [
+        { "type": "armor_class", "value": 1 },
+        { "type": "flag_modifier", "flag": "Resists_Unholy_Damage", "action": "add" }
+      ]
+    },
+    {
+      "id": "celestial_cuirass",
+      "name": "Небесная Кираса",
+      "slot": "chest",
+      "description": "Доспех, сияющий слабым, божественным светом. Ощущается легким как перышко, но прочным как гора.",
+      "effects": [
+        { "type": "armor_class", "value": 9 },
+        { "type": "stat_modifier", "stat": "charisma", "value": 1 },
+        { "type": "flag_modifier", "flag": "Flies_Occasionally", "action": "add" }
+      ]
+    },
+    {
+      "id": "worn_thieves_gloves",
+      "name": "Потрепанные Перчатки Вора",
+      "slot": "hands",
+      "description": "Старые, потертые перчатки с особой прошивкой на кончиках пальцев, идеально подходят для незаметной работы.",
+      "effects": [
+        { "type": "armor_class", "value": 0 },
+        { "type": "check_bonus", "check": "stealth", "value": 4 }
+      ]
+    },
+    {
+      "id": "spiked_bone_helmet",
+      "name": "Шлем из Шипованной Кости",
+      "slot": "head",
+      "description": "Жестокий шлем, изготовленный из отполированных костей и заостренных шипов. Выглядит устрашающе.",
+      "effects": [
+        { "type": "armor_class", "value": 3 },
+        { "type": "check_bonus", "check": "fear", "value": 4 }
+      ]
+    }
+  ]

@@ -1,0 +1,103 @@
+[
+    {
+      "id": "iron_longsword",
+      "name": "Железный Длинный Меч",
+      "slot": "weapon",
+      "description": "Надежный и хорошо сбалансированный длинный меч, обычное оружие многих солдат и искателей приключений.",
+      "effects": [
+        { "type": "damage", "value": "1d8", "damage_type": "slashing" }
+      ]
+    },
+    {
+      "id": "elvish_longbow",
+      "name": "Эльфийский Длинный Лук",
+      "slot": "weapon",
+      "description": "Изготовлен из вечного дерева, легкий и смертоносный в руках опытного лучника. Имеет изящные гравировки.",
+      "effects": [
+        { "type": "damage", "value": "1d10", "damage_type": "piercing" },
+        { "type": "stat_modifier", "stat": "dexterity", "value": 1 }
+      ]
+    },
+    {
+      "id": "dwarven_warhammer",
+      "name": "Дварфский Боевой Молот",
+      "slot": "weapon",
+      "description": "Массивная кувалда, способная пробить даже самую крепкую броню. Чувствуется мощной и несокрушимой.",
+      "effects": [
+        { "type": "damage", "value": "1d12", "damage_type": "bludgeoning" },
+        { "type": "check_bonus", "check": "fear", "value": 3 }
+      ]
+    },
+    {
+      "id": "shadow_dagger",
+      "name": "Кинжал Тени",
+      "slot": "weapon",
+      "description": "Лезвие этого кинжала поглощает свет, позволяя носителю легче оставаться незамеченным в тени. Изготовлен из вулканического обсидиана.",
+      "effects": [
+        { "type": "damage", "value": "1d4", "damage_type": "piercing" },
+        { "type": "check_bonus", "check": "stealth", "value": 7 }
+      ]
+    },
+    {
+      "id": "wizard_staff_of_arcane_might",
+      "name": "Посох Тайной Мощи Волшебника",
+      "slot": "weapon",
+      "description": "Древний посох, покрытый рунами и шепчущий на ветру. Концентрирует магическую энергию.",
+      "effects": [
+        { "type": "damage", "value": "1d6", "damage_type": "bludgeoning" },
+        { "type": "stat_modifier", "stat": "intelligence", "value": 2 }
+      ]
+    },
+    {
+      "id": "orcish_greataxe",
+      "name": "Орочий Большой Топор",
+      "slot": "weapon",
+      "description": "Грубый, но невероятно мощный топор из ржавого железа и кости. Весьма эффективен против неподготовленных врагов.",
+      "effects": [
+        { "type": "damage", "value": "2d6", "damage_type": "slashing" },
+        { "type": "stat_modifier", "stat": "charisma", "value": -1 }
+      ]
+    },
+    {
+      "id": "flame_tongue_rapier",
+      "name": "Рапира 'Пылающий Язык'",
+      "slot": "weapon",
+      "description": "Элегантная рапира, которая может вспыхивать пламенем при желании владельца. Идеальна для проворных бойцов.",
+      "effects": [
+        { "type": "damage", "value": "1d6", "damage_type": "piercing" },
+        { "type": "damage", "value": "1d4", "damage_type": "fire" },
+        { "type": "stat_modifier", "stat": "dexterity", "value": 1 }
+      ]
+    },
+    {
+      "id": "holy_avenger_sword",
+      "name": "Меч Святого Мстителя",
+      "slot": "weapon",
+      "description": "Легендарный меч, выкованный светом богов, сияет при прикосновении к нечистым созданиям.",
+      "effects": [
+        { "type": "damage", "value": "1d10", "damage_type": "slashing" },
+        { "type": "damage", "value": "1d6", "damage_type": "holy" },
+        { "type": "flag_modifier", "flag": "Smite_Undead_And_Demons", "action": "add" }
+      ]
+    },
+    {
+      "id": "poisoned_dart_pouch",
+      "name": "Мешочек Ядовитых Дротиков",
+      "slot": "weapon",
+      "description": "Небольшой кожаный мешочек, содержащий дюжину тонких, отравленных дротиков. Идеально для бесшумного нападения.",
+      "effects": [
+        { "type": "damage", "value": "1d4", "damage_type": "piercing" },
+        { "type": "flag_modifier", "flag": "Inflicts_Weak_Poison", "action": "add" }
+      ]
+    },
+    {
+      "id": "ghouls_fang_knife",
+      "name": "Кинжал 'Клык Гуля'",
+      "slot": "weapon",
+      "description": "Изготовлен из клыка ужасного гуля, этот нож источает мерзкий запах. Каждый удар оставляет слабость в теле врага.",
+      "effects": [
+        { "type": "damage", "value": "1d6", "damage_type": "piercing" },
+        { "type": "flag_modifier", "flag": "Inflicts_Sickness", "action": "add" }
+      ]
+    }
+  ]

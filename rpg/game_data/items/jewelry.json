@@ -1,0 +1,70 @@
+[
+    {
+      "id": "ring_of_minor_regeneration",
+      "name": "Кольцо Малой Регенерации",
+      "slot": "ring",
+      "description": "Простое серебряное кольцо, которое, кажется, слегка пульсирует жизнью. Оно заживляет небольшие раны со временем.",
+      "effects": [
+        { "type": "flag_modifier", "flag": "Minor_HP_Regen", "action": "add" }
+      ]
+    },
+    {
+      "id": "amulet_of_wise_counsel",
+      "name": "Амулет Мудрого Советника",
+      "slot": "amulet",
+      "description": "Изготовленный из полированного нефрита, этот амулет шепчет мудрые советы в уме, улучшая вашу способность убеждать.",
+      "effects": [
+        { "type": "stat_modifier", "stat": "charisma", "value": 2 },
+        { "type": "check_bonus", "check": "persuasion", "value": 5 }
+      ]
+    },
+    {
+      "id": "sapphire_of_the_deep",
+      "name": "Сапфир Глубин",
+      "slot": "amulet",
+      "description": "Массивный, мерцающий синим сапфир, напоминающий океан. Он кажется связанным со стихией воды и льда.",
+      "effects": [
+        { "type": "stat_modifier", "stat": "intelligence", "value": 1 },
+        { "type": "flag_modifier", "flag": "Cold_Resistance", "action": "add" }
+      ]
+    },
+    {
+      "id": "bracer_of_steady_hand",
+      "name": "Наруч Верной Руки",
+      "slot": "hands",
+      "description": "Кожаный наруч с вшитой золотой нитью. Дарует владельцу невероятную ловкость и точность.",
+      "effects": [
+        { "type": "stat_modifier", "stat": "dexterity", "value": 1 },
+        { "type": "check_bonus", "check": "perception", "value": 3 }
+      ]
+    },
+    {
+      "id": "orb_of_ominous_shadows",
+      "name": "Сфера Зловещих Теней",
+      "slot": "amulet",
+      "description": "Черный, непрозрачный шар, который всегда кажется прохладным на ощупь. Излучает едва уловимое ощущение беспокойства, но дарует способности.",
+      "effects": [
+        { "type": "check_bonus", "check": "stealth", "value": 6 },
+        { "type": "check_bonus", "check": "persuasion", "value": -2 }
+      ]
+    },
+    {
+      "id": "ring_of_fire_protection",
+      "name": "Кольцо Защиты от Огня",
+      "slot": "ring",
+      "description": "Золотое кольцо, в центре которого вплавлен крошечный, но устойчивый язычок пламени. Чувствуется теплым.",
+      "effects": [
+        { "type": "flag_modifier", "flag": "Fire_Resistance_Minor", "action": "add" }
+      ]
+    },
+    {
+      "id": "medallion_of_the_undying",
+      "name": "Медальон Бессмертного",
+      "slot": "amulet",
+      "description": "Тяжелый бронзовый медальон с изображением перевернутого черепа. Считается, что он дарует его владельцу неукротимую волю к жизни, но ценой других его качеств.",
+      "effects": [
+        { "type": "flag_modifier", "flag": "Resists_Death_Spells", "action": "add" },
+        { "type": "stat_modifier", "stat": "charisma", "value": -1 }
+      ]
+    }
+  ]
